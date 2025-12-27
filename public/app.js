@@ -1,10 +1,10 @@
 const tableDiv = document.getElementById("table");
+let currentFilter = "all";
 
 /* =========================
    Google Cloud TTS
 ========================= */
 function speak(text) {
-  // 이전 음성 중단
   if (window._ttsAudio) {
     window._ttsAudio.pause();
     window._ttsAudio = null;
@@ -33,10 +33,16 @@ async function loadTable() {
   const res = await fetch("/table");
   const { words, sessions, records, statsByWord } = await res.json();
 
-  // record lookup: wordId_sessionId -> result
+  // record lookup
   const recordMap = {};
   records.forEach(r => {
     recordMap[`${r.wordId}_${r.sessionId}`] = r.result;
+  });
+
+  /* ===== APPLY FILTER ===== */
+  const filteredWords = words.filter(w => {
+    if (currentFilter === "all") return true;
+    return w.level === currentFilter;
   });
 
   const table = document.createElement("table");
@@ -45,27 +51,9 @@ async function loadTable() {
   const thead = document.createElement("thead");
   const hr = document.createElement("tr");
 
-  // Word column
-  const thWord = document.createElement("th");
-  thWord.innerText = "Word";
-  hr.appendChild(thWord);
-
-  // Stats column
-  const thStats = document.createElement("th");
-  thStats.innerText = "Stats";
-  hr.appendChild(thStats);
-
-  // Session columns (latest → past)
-  sessions.forEach(s => {
+  ["Word", "Stats", ...sessions.map(s => s.sessionId)].forEach(text => {
     const th = document.createElement("th");
-    th.innerText = s.sessionId;
-
-    if (s.status === "open") {
-      th.style.background = "#222";
-    } else {
-      th.style.opacity = "0.4";
-    }
-
+    th.innerText = text;
     hr.appendChild(th);
   });
 
@@ -75,10 +63,10 @@ async function loadTable() {
   /* ---------- body ---------- */
   const tbody = document.createElement("tbody");
 
-  words.forEach(w => {
+  filteredWords.forEach(w => {
     const tr = document.createElement("tr");
 
-    /* --- Word cell (TTS + Long Press Delete) --- */
+    /* --- Word cell --- */
     const wordTd = document.createElement("td");
     wordTd.innerText = w.text;
     wordTd.style.cursor = "pointer";
@@ -86,7 +74,6 @@ async function loadTable() {
     let pressTimer = null;
     let longPressed = false;
 
-    // touch start: long press timer
     wordTd.addEventListener("touchstart", () => {
       longPressed = false;
       pressTimer = setTimeout(async () => {
@@ -95,10 +82,9 @@ async function loadTable() {
 
         await fetch(`/words/${w._id}`, { method: "DELETE" });
         loadTable();
-      }, 600); // 600ms = long press
+      }, 600);
     });
 
-    // touch end: cancel if short tap
     wordTd.addEventListener("touchend", () => {
       clearTimeout(pressTimer);
       pressTimer = null;
@@ -109,10 +95,8 @@ async function loadTable() {
       pressTimer = null;
     });
 
-    // click (short tap): speak
     wordTd.addEventListener("click", () => {
-      if (longPressed) return;
-      speak(w.text);
+      if (!longPressed) speak(w.text);
     });
 
     tr.appendChild(wordTd);
@@ -134,10 +118,10 @@ async function loadTable() {
 
       if (s.status === "open") {
         td.style.cursor = "pointer";
-        td.addEventListener("click", async () => {
+        td.onclick = async () => {
           await toggleRecord(w._id, s._id);
           loadTable();
-        });
+        };
       } else {
         td.style.opacity = "0.3";
       }
@@ -187,6 +171,56 @@ document.getElementById("deleteSession").onclick = async () => {
   await fetch("/sessions/current", { method: "DELETE" });
   loadTable();
 };
+
+// 벌크 단어 추가
+const bulkBtn = document.getElementById("bulkAddWords");
+
+if (bulkBtn) {
+  bulkBtn.onclick = async () => {
+    const textArea = document.getElementById("bulkWords");
+    const levelSelect = document.getElementById("wordLevel");
+
+    if (!textArea || !levelSelect) return;
+
+    const text = textArea.value.trim();
+    const level = levelSelect.value;
+
+    if (!text) return;
+
+    const res = await fetch("/words/bulk", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, level })
+    });
+
+    const result = await res.json();
+
+    alert(
+      `난이도: ${level}\n추가됨: ${result.inserted}개\n중복: ${result.skipped}개`
+    );
+
+    textArea.value = "";
+    loadTable();
+  };
+}
+
+
+/* =========================
+   Filter buttons
+========================= */
+document.querySelectorAll("#filters button").forEach(btn => {
+  btn.onclick = () => {
+    currentFilter = btn.dataset.level;
+
+    document
+      .querySelectorAll("#filters button")
+      .forEach(b => b.classList.remove("active"));
+
+    btn.classList.add("active");
+
+    loadTable();
+  };
+});
 
 /* =========================
    Init
