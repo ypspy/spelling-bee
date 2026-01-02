@@ -2,21 +2,19 @@ const tableDiv = document.getElementById("table");
 let currentFilter = "all";
 
 /* =========================
-   Google Cloud TTS
+   Google TTS
 ========================= */
 function speak(text) {
   if (window._ttsAudio) {
     window._ttsAudio.pause();
-    window._ttsAudio = null;
   }
-
   const audio = new Audio(`/tts?text=${encodeURIComponent(text)}`);
   window._ttsAudio = audio;
   audio.play();
 }
 
 /* =========================
-   API helpers
+   API Helpers
 ========================= */
 async function toggleRecord(wordId, sessionId) {
   await fetch("/records/toggle", {
@@ -27,23 +25,36 @@ async function toggleRecord(wordId, sessionId) {
 }
 
 /* =========================
-   Main table render
+   Main Table Render
 ========================= */
 async function loadTable() {
   const res = await fetch("/table");
   const { words, sessions, records, statsByWord } = await res.json();
 
-  // record lookup
+  /* --- record lookup --- */
   const recordMap = {};
   records.forEach(r => {
     recordMap[`${r.wordId}_${r.sessionId}`] = r.result;
   });
 
-  /* ===== APPLY FILTER ===== */
-  const filteredWords = words.filter(w => {
+  /* --- filtering --- */
+  let filteredWords = words.filter(w => {
     if (currentFilter === "all") return true;
+
+    if (currentFilter === "wrong") {
+      if (sessions.length === 0) return false;
+
+      // 최신 세션 = TN (배열의 마지막)
+      const latestSession = sessions[sessions.length - 1];
+      const key = `${w._id}_${latestSession._id}`;
+      return recordMap[key] === "fail";
+    }
+
     return w.level === currentFilter;
   });
+
+  const totalWords = filteredWords.length;
+  const totalSessions = sessions.length;
 
   const table = document.createElement("table");
 
@@ -51,9 +62,24 @@ async function loadTable() {
   const thead = document.createElement("thead");
   const hr = document.createElement("tr");
 
-  ["Word", "Stats", ...sessions.map(s => s.sessionId)].forEach(text => {
+  ["#", "Word", "Stats"].forEach(t => {
     const th = document.createElement("th");
-    th.innerText = text;
+    th.innerText = t;
+    hr.appendChild(th);
+  });
+
+  // 왼쪽 = 최신 = TN
+  sessions.forEach((s, idx) => {
+    const th = document.createElement("th");
+    th.innerText = `T${totalSessions - idx}`;
+
+    if (s.status === "open") {
+      th.style.background = "#222";
+      th.style.fontWeight = "600";
+    } else {
+      th.style.opacity = "0.4";
+    }
+
     hr.appendChild(th);
   });
 
@@ -63,58 +89,35 @@ async function loadTable() {
   /* ---------- body ---------- */
   const tbody = document.createElement("tbody");
 
-  filteredWords.forEach(w => {
+  filteredWords.forEach((w, i) => {
     const tr = document.createElement("tr");
 
-    /* --- Word cell --- */
+    /* # */
+    const idxTd = document.createElement("td");
+    idxTd.innerText = `${i + 1}/${totalWords}`;
+    tr.appendChild(idxTd);
+
+    /* Word */
     const wordTd = document.createElement("td");
     wordTd.innerText = w.text;
     wordTd.style.cursor = "pointer";
-
-    let pressTimer = null;
-    let longPressed = false;
-
-    wordTd.addEventListener("touchstart", () => {
-      longPressed = false;
-      pressTimer = setTimeout(async () => {
-        longPressed = true;
-        if (!confirm(`"${w.text}" 단어를 삭제할까요?\n모든 기록이 함께 삭제됩니다.`)) return;
-
-        await fetch(`/words/${w._id}`, { method: "DELETE" });
-        loadTable();
-      }, 600);
-    });
-
-    wordTd.addEventListener("touchend", () => {
-      clearTimeout(pressTimer);
-      pressTimer = null;
-    });
-
-    wordTd.addEventListener("touchmove", () => {
-      clearTimeout(pressTimer);
-      pressTimer = null;
-    });
-
-    wordTd.addEventListener("click", () => {
-      if (!longPressed) speak(w.text);
-    });
-
+    wordTd.onclick = () => speak(w.text);
     tr.appendChild(wordTd);
 
-    /* --- Stats cell --- */
+    /* Stats */
     const stat = statsByWord[w._id] || { success: 0, attempts: 0 };
     const statTd = document.createElement("td");
     statTd.innerText = `${stat.success} / ${stat.attempts}`;
     tr.appendChild(statTd);
 
-    /* --- Session cells --- */
+    /* Sessions */
     sessions.forEach(s => {
       const td = document.createElement("td");
       const key = `${w._id}_${s._id}`;
       const val = recordMap[key];
 
       if (val === "success") td.innerText = "✓";
-      else if (val === "fail") td.innerText = "✕";
+      if (val === "fail") td.innerText = "✕";
 
       if (s.status === "open") {
         td.style.cursor = "pointer";
@@ -123,7 +126,7 @@ async function loadTable() {
           loadTable();
         };
       } else {
-        td.style.opacity = "0.3";
+        td.style.opacity = "0.35";
       }
 
       tr.appendChild(td);
@@ -133,18 +136,30 @@ async function loadTable() {
   });
 
   table.appendChild(tbody);
-
   tableDiv.innerHTML = "";
   tableDiv.appendChild(table);
 }
 
 /* =========================
+   Filters
+========================= */
+document.querySelectorAll("#filters button").forEach(btn => {
+  btn.onclick = () => {
+    document
+      .querySelectorAll("#filters button")
+      .forEach(b => b.classList.remove("active"));
+
+    btn.classList.add("active");
+    currentFilter = btn.dataset.level;
+    loadTable();
+  };
+});
+
+/* =========================
    Controls
 ========================= */
-
-// + 단어 추가
 document.getElementById("addWord").onclick = async () => {
-  const text = prompt("추가할 단어를 입력하세요");
+  const text = prompt("추가할 단어");
   if (!text || !text.trim()) return;
 
   await fetch("/words", {
@@ -156,71 +171,17 @@ document.getElementById("addWord").onclick = async () => {
   loadTable();
 };
 
-// + 세션 추가
 document.getElementById("addSession").onclick = async () => {
   if (!confirm("새 세션을 시작할까요?")) return;
-
   await fetch("/sessions", { method: "POST" });
   loadTable();
 };
 
-// 현재 세션 삭제
 document.getElementById("deleteSession").onclick = async () => {
-  if (!confirm("현재 세션과 모든 기록이 삭제됩니다. 계속할까요?")) return;
-
+  if (!confirm("현재 세션을 삭제할까요?")) return;
   await fetch("/sessions/current", { method: "DELETE" });
   loadTable();
 };
-
-// 벌크 단어 추가
-const bulkBtn = document.getElementById("bulkAddWords");
-
-if (bulkBtn) {
-  bulkBtn.onclick = async () => {
-    const textArea = document.getElementById("bulkWords");
-    const levelSelect = document.getElementById("wordLevel");
-
-    if (!textArea || !levelSelect) return;
-
-    const text = textArea.value.trim();
-    const level = levelSelect.value;
-
-    if (!text) return;
-
-    const res = await fetch("/words/bulk", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, level })
-    });
-
-    const result = await res.json();
-
-    alert(
-      `난이도: ${level}\n추가됨: ${result.inserted}개\n중복: ${result.skipped}개`
-    );
-
-    textArea.value = "";
-    loadTable();
-  };
-}
-
-
-/* =========================
-   Filter buttons
-========================= */
-document.querySelectorAll("#filters button").forEach(btn => {
-  btn.onclick = () => {
-    currentFilter = btn.dataset.level;
-
-    document
-      .querySelectorAll("#filters button")
-      .forEach(b => b.classList.remove("active"));
-
-    btn.classList.add("active");
-
-    loadTable();
-  };
-});
 
 /* =========================
    Init
