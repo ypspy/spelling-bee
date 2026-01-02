@@ -14,7 +14,7 @@ function speak(text) {
 }
 
 /* =========================
-   API Helpers
+   API Helper
 ========================= */
 async function toggleRecord(wordId, sessionId) {
   await fetch("/records/toggle", {
@@ -31,26 +31,31 @@ async function loadTable() {
   const res = await fetch("/table");
   const { words, sessions, records, statsByWord } = await res.json();
 
-  /* --- record lookup --- */
+  /* ---------- record lookup ---------- */
   const recordMap = {};
   records.forEach(r => {
     recordMap[`${r.wordId}_${r.sessionId}`] = r.result;
   });
 
-  /* --- filtering --- */
-  let filteredWords = words.filter(w => {
+  /* ---------- filtering ---------- */
+  const filteredWords = words.filter(w => {
     if (currentFilter === "all") return true;
 
+    // 직전 오답만: TN-1 기준
     if (currentFilter === "wrong") {
-      if (sessions.length === 0) return false;
+      if (sessions.length < 2) return false;
 
-      // 최신 세션 = TN (배열의 마지막)
-      const latestSession = sessions[sessions.length - 1];
-      const key = `${w._id}_${latestSession._id}`;
+      const prevSession = sessions[1]; // TN-1
+      const key = `${w._id}_${prevSession._id}`;
       return recordMap[key] === "fail";
     }
 
-    return w.level === currentFilter;
+    // 난이도 필터
+    if (["one", "two", "three"].includes(currentFilter)) {
+      return w.level === currentFilter;
+    }
+
+    return true;
   });
 
   const totalWords = filteredWords.length;
@@ -62,9 +67,9 @@ async function loadTable() {
   const thead = document.createElement("thead");
   const hr = document.createElement("tr");
 
-  ["#", "Word", "Stats"].forEach(t => {
+  ["#", "Word", "Stats"].forEach(label => {
     const th = document.createElement("th");
-    th.innerText = t;
+    th.innerText = label;
     hr.appendChild(th);
   });
 
@@ -93,9 +98,9 @@ async function loadTable() {
     const tr = document.createElement("tr");
 
     /* # */
-    const idxTd = document.createElement("td");
-    idxTd.innerText = `${i + 1}/${totalWords}`;
-    tr.appendChild(idxTd);
+    const numTd = document.createElement("td");
+    numTd.innerText = `${i + 1}/${totalWords}`;
+    tr.appendChild(numTd);
 
     /* Word */
     const wordTd = document.createElement("td");
@@ -117,7 +122,7 @@ async function loadTable() {
       const val = recordMap[key];
 
       if (val === "success") td.innerText = "✓";
-      if (val === "fail") td.innerText = "✕";
+      else if (val === "fail") td.innerText = "✕";
 
       if (s.status === "open") {
         td.style.cursor = "pointer";
