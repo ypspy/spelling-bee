@@ -1,11 +1,19 @@
 const express = require("express");
 const router = express.Router();
 const Record = require("../models/Record");
-const Session = require("../models/Session");
+const Word = require("../models/Word");
 
 /**
  * POST /records/toggle
- * cell 클릭 토글
+ * body: { wordId, sessionId }
+ *
+ * 상태 순환:
+ * 없음 → success → fail → 없음
+ *
+ * priority 규칙:
+ * - success → fail : priority +1
+ * - fail → 취소   : priority -1
+ * - priority 범위 : 0 ~ 2
  */
 router.post("/toggle", async (req, res) => {
   try {
@@ -15,18 +23,12 @@ router.post("/toggle", async (req, res) => {
       return res.status(400).json({ error: "wordId and sessionId required" });
     }
 
-    // 1. 세션이 open인지 확인
-    const session = await Session.findById(sessionId);
-    if (!session || session.status !== "open") {
-      return res.status(403).json({ error: "Session is not editable" });
-    }
-
-    // 2. 기존 record 조회
     const record = await Record.findOne({ wordId, sessionId });
 
-    // 3. 상태 순환
+    /* =========================
+       1️⃣ 없음 → success
+    ========================= */
     if (!record) {
-      // 없음 → success
       const created = await Record.create({
         wordId,
         sessionId,
@@ -35,18 +37,39 @@ router.post("/toggle", async (req, res) => {
       return res.json(created);
     }
 
+    /* =========================
+       2️⃣ success → fail
+    ========================= */
     if (record.result === "success") {
-      // success → fail
       record.result = "fail";
       await record.save();
+
+      const word = await Word.findById(wordId);
+      if (word) {
+        word.priority = Math.min(2, (word.priority || 0) + 1);
+        await word.save();
+      }
+
       return res.json(record);
     }
 
-    // fail → 없음 (삭제)
-    await Record.deleteOne({ _id: record._id });
-    res.json({ deleted: true });
+    /* =========================
+       3️⃣ fail → 취소(삭제)
+    ========================= */
+    if (record.result === "fail") {
+      await Record.deleteOne({ _id: record._id });
+
+      const word = await Word.findById(wordId);
+      if (word) {
+        word.priority = Math.max(0, (word.priority || 0) - 1);
+        await word.save();
+      }
+
+      return res.json({ canceled: true });
+    }
 
   } catch (err) {
+    console.error("records/toggle error:", err);
     res.status(500).json({ error: err.message });
   }
 });

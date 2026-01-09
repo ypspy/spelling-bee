@@ -2,45 +2,44 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport"
-        content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, maximum-scale=1"
+  />
   <title>Spelling Bee</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+
   <h1>Spelling Bee</h1>
 
-  <div id="controls">
-    <div id="filters" style="margin-bottom:10px;">
-      <button data-level="all">All</button>
-      <button data-level="one">One</button>
-      <button data-level="two">Two</button>
-      <button data-level="three">Three</button>
-      <button data-level="wrong">직전 오답만</button>
-    </div>
-  <!-- <br>
-    <select id="wordLevel">
-      <option value="one">One Bee</option>
-      <option value="two">Two Bee</option>
-      <option value="three">Three Bee</option>
-    </select>
+  <!-- Alphabet Filter (JS에서 동적 생성) -->
+  <div id="alphabetFilters"></div>
 
-  <textarea
-    id="bulkWords"
-    placeholder="단어를 여러 개 붙여넣으세요"
-    rows="5"
-    style="width:100%; font-size:16px;"
-  ></textarea>
-
-  <button id="bulkAddWords">
-    단어 벌크 추가
-  </button> -->
   <br>
-    <button id="addWord">+ 단어</button>
+  <!-- <textarea id="bulkWords" rows="10" style="width:100%"></textarea>
+  <button id="bulkAddWords">벌크 입력</button>
+  <br> -->
+
+  <!-- Difficulty / Session Filters -->
+  <div id="filters">
+    <button data-level="all" class="active">All</button>
+    <button data-level="one">One</button>
+    <button data-level="two">Two</button>
+    <button data-level="three">Three</button>
+    <button data-level="wrong">직전 오답</button>
+    <button data-level="today">오늘 연습</button>
+    <button id="examModeBtn">시험 모드</button>
+  </div>
+
+  <!-- Controls (관리자용) -->
+  <div id="controls">
+    <!-- <button id="addWord">+ 단어</button> -->
     <button id="addSession">+ 세션</button>
     <button id="deleteSession">- 세션</button>
   </div>
 
+  <!-- Table -->
   <div id="table"></div>
 
   <script src="app.js"></script>
