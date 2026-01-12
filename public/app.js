@@ -63,11 +63,18 @@ async function toggleBookmark(wordId, value) {
   });
 }
 
+/* ★ HIDE 전용 helper (추가) */
+async function hideWord(wordId) {
+  await fetch(`/words/${wordId}/hide`, {
+    method: "PATCH"
+  });
+}
+
 /* =========================
    Filter Wiring
 ========================= */
 function wireFilters() {
-  // Level (radio)
+  // Level
   document
     .querySelectorAll('#filters button[data-type="level"]')
     .forEach(btn => {
@@ -84,7 +91,7 @@ function wireFilters() {
       };
     });
 
-  // Mode (toggle)
+  // Mode
   document
     .querySelectorAll('#filters button[data-type="mode"]')
     .forEach(btn => {
@@ -169,10 +176,8 @@ async function loadTable() {
   let filtered = words.filter(w => {
     if (filters.alphabet !== "all" && w.alphabet !== filters.alphabet)
       return false;
-
     if (filters.level !== "all" && w.level !== filters.level)
       return false;
-
     if (filters.mode.exam && w.priority !== 2)
       return false;
 
@@ -265,7 +270,7 @@ async function loadTable() {
 
     tr.appendChild(wordTd);
 
-    /* ---------- Stats : Edit word ---------- */
+    /* ---------- Stats : Edit / HIDE ---------- */
     const stat = statsByWord[w._id] || { success: 0, attempts: 0 };
     const statTd = document.createElement("td");
     statTd.innerText = `${stat.success}/${stat.attempts}`;
@@ -287,6 +292,17 @@ async function loadTable() {
       const finish = async save => {
         if (save) {
           const newText = input.value.trim();
+
+          /* 🔒 HIDE 명령 */
+          if (newText.toUpperCase() === "HIDE") {
+            const ok = confirm("이 단어를 숨기시겠습니까?");
+            if (ok) {
+              await hideWord(w._id);
+            }
+            return loadTable();
+          }
+
+          /* 기존 수정 */
           if (newText && newText !== w.text) {
             await updateWordText(w._id, newText);
           }
@@ -355,7 +371,6 @@ async function loadTable() {
 
   bookmarkBtn.onclick = () => {
     const startIdx = (currentPage + 1) * PAGE_SIZE;
-
     let idx = filtered.slice(startIdx).findIndex(w => w.bookmarked);
 
     if (idx === -1) {
