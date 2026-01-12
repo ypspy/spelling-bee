@@ -55,7 +55,6 @@ async function updateWordText(wordId, text) {
   });
 }
 
-/* ★ 북마크 토글 */
 async function toggleBookmark(wordId, value) {
   await fetch(`/words/${wordId}/bookmark`, {
     method: "PATCH",
@@ -68,7 +67,7 @@ async function toggleBookmark(wordId, value) {
    Filter Wiring
 ========================= */
 function wireFilters() {
-  /* Level (radio) */
+  // Level (radio)
   document
     .querySelectorAll('#filters button[data-type="level"]')
     .forEach(btn => {
@@ -85,7 +84,7 @@ function wireFilters() {
       };
     });
 
-  /* Mode (toggle) */
+  // Mode (toggle)
   document
     .querySelectorAll('#filters button[data-type="mode"]')
     .forEach(btn => {
@@ -99,7 +98,7 @@ function wireFilters() {
       };
     });
 
-  /* Alphabet */
+  // Alphabet
   alphabetFilterDiv.onclick = e => {
     if (e.target.tagName !== "BUTTON") return;
 
@@ -228,12 +227,51 @@ async function loadTable() {
     const tr = document.createElement("tr");
     tr.classList.add(`level-${w.level}`);
 
-    /* ---------- # (edit spelling) ---------- */
+    /* ---------- # : Bookmark ---------- */
     const numTd = document.createElement("td");
     numTd.innerText = `${start + i + 1}/${filtered.length}`;
     numTd.style.cursor = "pointer";
 
-    numTd.onclick = () => {
+    if (w.bookmarked) {
+      numTd.style.color = "#ffd966";
+      numTd.style.fontWeight = "600";
+    }
+
+    numTd.onclick = e => {
+      e.stopPropagation();
+      toggleBookmark(w._id, !w.bookmarked).then(loadTable);
+    };
+
+    tr.appendChild(numTd);
+
+    /* ---------- Word ---------- */
+    const wordTd = document.createElement("td");
+    wordTd.className = "word";
+    wordTd.innerText = w.text;
+
+    if (w.priority > 0) {
+      const dot = document.createElement("span");
+      dot.className = "priority-dot";
+      dot.innerText = " ●".repeat(w.priority);
+      wordTd.appendChild(dot);
+    }
+
+    wordTd.onclick = e => {
+      if (filters.mode.exam) return speak(w.text);
+      if (e.shiftKey) return updatePriority(w._id, +1).then(loadTable);
+      if (e.altKey) return updatePriority(w._id, -1).then(loadTable);
+      speak(w.text);
+    };
+
+    tr.appendChild(wordTd);
+
+    /* ---------- Stats : Edit word ---------- */
+    const stat = statsByWord[w._id] || { success: 0, attempts: 0 };
+    const statTd = document.createElement("td");
+    statTd.innerText = `${stat.success}/${stat.attempts}`;
+    statTd.style.cursor = "pointer";
+
+    statTd.onclick = () => {
       if (filters.mode.exam) return;
 
       const input = document.createElement("input");
@@ -241,8 +279,8 @@ async function loadTable() {
       input.value = w.text;
       input.style.width = "100%";
 
-      numTd.innerHTML = "";
-      numTd.appendChild(input);
+      statTd.innerHTML = "";
+      statTd.appendChild(input);
       input.focus();
       input.select();
 
@@ -264,49 +302,6 @@ async function loadTable() {
       input.onblur = () => finish(true);
     };
 
-    tr.appendChild(numTd);
-
-    /* ---------- Word + Bookmark ---------- */
-    const wordTd = document.createElement("td");
-    wordTd.className = "word";
-
-    const bm = document.createElement("span");
-    bm.innerText = w.bookmarked ? "★" : "☆";
-    bm.style.cursor = "pointer";
-    bm.style.marginRight = "8px";
-    bm.style.color = w.bookmarked ? "#ffd966" : "#555";
-
-    bm.onclick = e => {
-      e.stopPropagation();
-      toggleBookmark(w._id, !w.bookmarked).then(loadTable);
-    };
-
-    wordTd.appendChild(bm);
-
-    const textSpan = document.createElement("span");
-    textSpan.innerText = w.text;
-    wordTd.appendChild(textSpan);
-
-    if (w.priority > 0) {
-      const dot = document.createElement("span");
-      dot.className = "priority-dot";
-      dot.innerText = " ●".repeat(w.priority);
-      wordTd.appendChild(dot);
-    }
-
-    wordTd.onclick = e => {
-      if (filters.mode.exam) return speak(w.text);
-      if (e.shiftKey) return updatePriority(w._id, +1).then(loadTable);
-      if (e.altKey) return updatePriority(w._id, -1).then(loadTable);
-      speak(w.text);
-    };
-
-    tr.appendChild(wordTd);
-
-    /* ---------- Stats ---------- */
-    const stat = statsByWord[w._id] || { success: 0, attempts: 0 };
-    const statTd = document.createElement("td");
-    statTd.innerText = `${stat.success}/${stat.attempts}`;
     tr.appendChild(statTd);
 
     /* ---------- Records ---------- */
@@ -355,16 +350,13 @@ async function loadTable() {
     loadTable();
   };
 
-  /* ★ 다음 북마크 */
   const bookmarkBtn = document.createElement("button");
-  bookmarkBtn.innerText = "★ 북마크";
+  bookmarkBtn.innerText = "북마크";
 
   bookmarkBtn.onclick = () => {
     const startIdx = (currentPage + 1) * PAGE_SIZE;
 
-    let idx = filtered
-      .slice(startIdx)
-      .findIndex(w => w.bookmarked);
+    let idx = filtered.slice(startIdx).findIndex(w => w.bookmarked);
 
     if (idx === -1) {
       idx = filtered.findIndex(w => w.bookmarked);
@@ -381,11 +373,11 @@ async function loadTable() {
   };
 
   pager.appendChild(prev);
+  pager.appendChild(next);
   pager.appendChild(bookmarkBtn);
   pager.appendChild(
     document.createTextNode(` ${currentPage + 1}/${totalPages} `)
   );
-  pager.appendChild(next);
 
   tableDiv.appendChild(pager);
 

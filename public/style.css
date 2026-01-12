@@ -8,7 +8,7 @@
 body {
   margin: 0;
   padding: 12px;
-  padding-left: calc(12px + 3in);
+  padding-left: calc(12px + 3in);   /* 전체 바디 indent */
   background: #000;
   color: #fff;
 
@@ -120,19 +120,56 @@ td:first-child {
 }
 
 /* =========================
-   Word 컬럼 (★ 여기만 더 큼)
+   Word 컬럼 (핵심)
 ========================= */
 td.word {
   text-align: left;
   white-space: nowrap;
   cursor: pointer;
-
-  font-size: 26px;        /* ★ 단어만 추가 확대 */
-  line-height: 1.25;      /* ★ 줄 안정감 */
   padding-right: 27px;
 }
 
-/* Stats 컬럼 */
+/* 단어 텍스트 (크게, 흰색) */
+td.word > span:not(.bookmark-hit):not(.priority-dot) {
+  font-size: 26px;
+  line-height: 1.25;
+  color: #fff;
+}
+
+/* =========================
+   Bookmark (small dot + big hit area)
+========================= */
+.bookmark-hit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 20px;      /* 클릭 영역 */
+  height: 20px;
+  margin-right: 8px;
+
+  cursor: pointer;
+}
+
+.bookmark-dot {
+  font-size: 12px;  /* 보이는 점 */
+  line-height: 1;
+  color: #ffd966;   /* 은은한 노랑 */
+  pointer-events: none;
+}
+
+/* =========================
+   Priority dots
+========================= */
+.priority-dot {
+  margin-left: 9px;
+  font-size: 16.5px;
+  color: #ff6666;
+}
+
+/* =========================
+   Stats / Session columns
+========================= */
 th:nth-child(3),
 td:nth-child(3) {
   text-align: center;
@@ -141,7 +178,6 @@ td:nth-child(3) {
   color: #555;
 }
 
-/* 세션 컬럼 (T1, T2, ...) */
 th:nth-child(n+4),
 td:nth-child(n+4) {
   min-width: 48px;
@@ -150,7 +186,7 @@ td:nth-child(n+4) {
 }
 
 /* =========================
-   Bee Level Accents (Dark)
+   Bee Level Accents
 ========================= */
 tr.level-one td.word {
   border-left: 6px solid #9ad1b3;
@@ -164,21 +200,6 @@ tr.level-three td.word {
   border-left: 6px solid #b6a9e6;
 }
 
-/* 단어 텍스트 */
-td.word > span:first-of-type {
-  font-size: 26px;        /* 단어 크게 */
-  line-height: 1.25;
-  color: #fff;            /* 흰색 유지 */
-}
-
-/* priority dot만 */
-td.word span.priority-dot {
-  margin-left: 9px;
-  font-size: 16.5px;
-  color: #ff6666;
-}
-
-
 /* =========================
    Exam Mode
 ========================= */
@@ -188,7 +209,8 @@ body.exam tr.level-three td.word {
   border-left-color: #333;
 }
 
-body.exam td.word span {
+body.exam .bookmark-hit,
+body.exam .priority-dot {
   display: none;
 }
 
@@ -197,7 +219,7 @@ body.exam td.word span {
 ========================= */
 @media (max-width: 900px) {
   body {
-    padding-left: 12px;
+    padding-left: 12px;   /* 모바일에서는 indent 제거 */
   }
 }
 
@@ -211,8 +233,8 @@ body.exam td.word span {
     font-size: 18px;
   }
 
-  td.word {
-    font-size: 22px;     /* 모바일에서도 살짝 강조 */
+  td.word > span:not(.bookmark-hit):not(.priority-dot) {
+    font-size: 22px;
   }
 
   button {
