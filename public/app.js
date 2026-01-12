@@ -35,7 +35,26 @@ async function updatePriority(wordId, delta) {
 }
 
 /* =========================
-   Exam Mode Toggle
+   Filter Wiring
+========================= */
+function wireFilterButtons() {
+  document
+    .querySelectorAll("#filters button, #alphabetFilters button")
+    .forEach(btn => {
+      btn.onclick = () => {
+        document
+          .querySelectorAll("#filters button, #alphabetFilters button")
+          .forEach(b => b.classList.remove("active"));
+
+        btn.classList.add("active");
+        currentFilter = btn.dataset.level;
+        loadTable();
+      };
+    });
+}
+
+/* =========================
+   Exam Mode
 ========================= */
 if (examModeBtn) {
   examModeBtn.onclick = () => {
@@ -53,7 +72,7 @@ async function loadTable() {
   const res = await fetch("/table");
   const { words, sessions, records, statsByWord } = await res.json();
 
-  /* ---------- Alphabet Filters ---------- */
+  /* Alphabet Filters */
   const alphabets = Array.from(
     new Set(words.map(w => w.alphabet).filter(Boolean))
   ).sort();
@@ -76,25 +95,18 @@ async function loadTable() {
     });
   }
 
-  /* ---------- Record Map ---------- */
+  /* Record Map */
   const recordMap = {};
   records.forEach(r => {
     recordMap[`${r.wordId}_${r.sessionId}`] = r.result;
   });
 
-  /* ---------- Filtering ---------- */
+  /* Filtering */
   const filteredWords = words.filter(w => {
     if (examMode && w.priority !== 2) return false;
 
     if (/^[A-Z]$/.test(currentFilter)) {
-      if (w.alphabet !== currentFilter) return false;
-    }
-
-    if (currentFilter === "today") {
-      if (w.priority < 1) return false;
-      if (sessions.length < 2) return false;
-      const prev = sessions[1];
-      return recordMap[`${w._id}_${prev._id}`] === "fail";
+      return w.alphabet === currentFilter;
     }
 
     if (["one", "two", "three"].includes(currentFilter)) {
@@ -110,19 +122,27 @@ async function loadTable() {
     return true;
   });
 
+  /* Sort A–Z */
+  filteredWords.sort((a, b) => {
+    if (a.alphabet !== b.alphabet) {
+      return (a.alphabet || "").localeCompare(b.alphabet || "");
+    }
+    return a.text.localeCompare(b.text);
+  });
+
   const totalWords = filteredWords.length;
   const totalSessions = sessions.length;
 
-  /* ---------- Table ---------- */
+  /* Table */
   const table = document.createElement("table");
 
   /* Header */
   const thead = document.createElement("thead");
   const hr = document.createElement("tr");
 
-  ["#", "Word", "Stats"].forEach(label => {
+  ["#", "Word", "Stats"].forEach(h => {
     const th = document.createElement("th");
-    th.innerText = label;
+    th.innerText = h;
     hr.appendChild(th);
   });
 
@@ -142,107 +162,48 @@ async function loadTable() {
 
   filteredWords.forEach((w, i) => {
     const tr = document.createElement("tr");
+    tr.classList.add(`level-${w.level}`);
 
-    /* Number */
     const numTd = document.createElement("td");
     numTd.innerText = `${i + 1}/${totalWords}`;
     tr.appendChild(numTd);
 
-    /* Word cell */
     const wordTd = document.createElement("td");
+    wordTd.classList.add("word");
     wordTd.innerText = w.text;
-    wordTd.style.cursor = "pointer";
 
     if (w.priority > 0) {
-      const badge = document.createElement("span");
-      badge.style.marginLeft = "6px";
-      badge.style.fontSize = "11px";
-      badge.style.color = "#ff5555";
-      badge.innerText = "●".repeat(w.priority);
-      wordTd.appendChild(badge);
+      const dot = document.createElement("span");
+      dot.innerText = "●".repeat(w.priority);
+      wordTd.appendChild(dot);
     }
 
-    /* ===== Mobile Touch Logic ===== */
-    let pressTimer = null;
-    let longPressed = false;
-    let lastTapTime = 0;
-    let singleTapTimer = null;
-
-    const DOUBLE_TAP_DELAY = 300;
-    const LONG_PRESS_DELAY = 600;
-
-    wordTd.addEventListener("touchstart", () => {
-      if (examMode) return;
-      longPressed = false;
-
-      pressTimer = setTimeout(async () => {
-        longPressed = true;
-        if (w.priority < 2) {
-          await updatePriority(w._id, +1);
-          loadTable();
-        }
-      }, LONG_PRESS_DELAY);
-    });
-
-    wordTd.addEventListener("touchend", async () => {
-      clearTimeout(pressTimer);
-      const now = Date.now();
-
-      if (!examMode && !longPressed && now - lastTapTime < DOUBLE_TAP_DELAY) {
-        lastTapTime = 0;
-        if (singleTapTimer) clearTimeout(singleTapTimer);
-        if (w.priority > 0) {
-          await updatePriority(w._id, -1);
-          loadTable();
-        }
-        return;
-      }
-
-      lastTapTime = now;
-      singleTapTimer = setTimeout(() => {
-        speak(w.text);
-        singleTapTimer = null;
-      }, DOUBLE_TAP_DELAY);
-    });
-
-    /* ===== Desktop Mouse Logic ===== */
-    wordTd.addEventListener("click", async (e) => {
-      // 모바일에서 이미 처리됨 → 중복 방지
-      if (e.pointerType === "touch") return;
-
+    wordTd.onclick = (e) => {
       if (examMode) {
         speak(w.text);
         return;
       }
 
       if (e.shiftKey) {
-        if (w.priority < 2) {
-          await updatePriority(w._id, +1);
-          loadTable();
-        }
+        updatePriority(w._id, +1).then(loadTable);
         return;
       }
 
       if (e.altKey) {
-        if (w.priority > 0) {
-          await updatePriority(w._id, -1);
-          loadTable();
-        }
+        updatePriority(w._id, -1).then(loadTable);
         return;
       }
 
       speak(w.text);
-    });
+    };
 
     tr.appendChild(wordTd);
 
-    /* Stats */
     const stat = statsByWord[w._id] || { success: 0, attempts: 0 };
     const statTd = document.createElement("td");
     statTd.innerText = `${stat.success} / ${stat.attempts}`;
     tr.appendChild(statTd);
 
-    /* Sessions */
     sessions.forEach(s => {
       const td = document.createElement("td");
       const val = recordMap[`${w._id}_${s._id}`];
@@ -252,10 +213,7 @@ async function loadTable() {
 
       if (s.status === "open" && !examMode) {
         td.style.cursor = "pointer";
-        td.onclick = async () => {
-          await toggleRecord(w._id, s._id);
-          loadTable();
-        };
+        td.onclick = () => toggleRecord(w._id, s._id).then(loadTable);
       } else {
         td.style.opacity = "0.35";
       }
@@ -270,61 +228,47 @@ async function loadTable() {
   tableDiv.innerHTML = "";
   tableDiv.appendChild(table);
 
-  /* ---------- Filter Buttons ---------- */
-  document
-    .querySelectorAll("#filters button, #alphabetFilters button")
-    .forEach(btn => {
-      btn.onclick = () => {
-        document
-          .querySelectorAll("#filters button, #alphabetFilters button")
-          .forEach(b => b.classList.remove("active"));
-        btn.classList.add("active");
-        currentFilter = btn.dataset.level;
-        loadTable();
-      };
-    });
-
-  /* ---------- Controls Lock ---------- */
-  ["addWord", "addSession", "deleteSession"].forEach(id => {
-    const btn = document.getElementById(id);
-    if (btn) btn.disabled = examMode;
-  });
+  wireFilterButtons();
 }
 
 /* =========================
    Controls
 ========================= */
-const addWordBtn = document.getElementById("addWord");
-if (addWordBtn) {
-  addWordBtn.onclick = async () => {
-    const text = prompt("추가할 단어");
-    if (!text) return;
-    await fetch("/words", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text })
-    });
-    loadTable();
-  };
-}
+document.addEventListener("DOMContentLoaded", () => {
+  const addWordBtn = document.getElementById("addWord");
+  if (addWordBtn) {
+    addWordBtn.onclick = async () => {
+      const text = prompt("추가할 단어");
+      if (!text) return;
+      await fetch("/words", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text })
+      });
+      loadTable();
+    };
+  }
 
-const addSessionBtn = document.getElementById("addSession");
-if (addSessionBtn) {
-  addSessionBtn.onclick = async () => {
-    if (!confirm("새 세션을 시작할까요?")) return;
-    await fetch("/sessions", { method: "POST" });
-    loadTable();
-  };
-}
+  const addSessionBtn = document.getElementById("addSession");
+  if (addSessionBtn) {
+    addSessionBtn.onclick = async () => {
+      if (!confirm("새 세션을 시작할까요?")) return;
+      await fetch("/sessions", { method: "POST" });
+      loadTable();
+    };
+  }
 
-const deleteSessionBtn = document.getElementById("deleteSession");
-if (deleteSessionBtn) {
-  deleteSessionBtn.onclick = async () => {
-    if (!confirm("현재 세션을 삭제할까요?")) return;
-    await fetch("/sessions/current", { method: "DELETE" });
-    loadTable();
-  };
-}
+  const deleteSessionBtn = document.getElementById("deleteSession");
+  if (deleteSessionBtn) {
+    deleteSessionBtn.onclick = async () => {
+      if (!confirm("현재 세션을 삭제할까요?")) return;
+      await fetch("/sessions/current", { method: "DELETE" });
+      loadTable();
+    };
+  }
+
+  wireFilterButtons();
+});
 
 /* =========================
    Init

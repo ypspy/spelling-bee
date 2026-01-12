@@ -1,5 +1,5 @@
 /* =========================
-   Reset & Base
+   Base (Dark Mode)
 ========================= */
 * {
   box-sizing: border-box;
@@ -10,165 +10,153 @@ body {
   padding: 12px;
   background: #000;
   color: #fff;
-  font-family: -apple-system, BlinkMacSystemFont,
-               "SF Pro Text", "Apple SD Gothic Neo",
-               sans-serif;
-  font-size: 14px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+               Roboto, Helvetica, Arial, sans-serif;
 }
 
 h1 {
   font-size: 20px;
-  font-weight: 600;
-  margin: 0 0 10px 0;
+  margin-bottom: 12px;
 }
 
 /* =========================
-   Filters & Controls Layout
+   Controls
 ========================= */
-#filters {
+#controls {
+  margin-bottom: 12px;
+}
+
+#filters,
+#alphabetFilters {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  width: 100%;
   margin-bottom: 6px;
 }
 
-#controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  width: 100%;
-  margin-bottom: 10px;
+button {
+  background: #111;
+  color: #ccc;
+  border: 1px solid #222;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 13px;
 }
 
-/* =========================
-   Buttons
-========================= */
-button {
-  background: #1c1c1c;
-  color: #fff;
-  border: 1px solid #333;
-  border-radius: 10px;
-  padding: 6px 12px;
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1;
-  cursor: pointer;
+button:hover {
+  background: #1a1a1a;
 }
 
 button.active {
-  background: #fff;
-  color: #000;
-  border-color: #fff;
+  background: #222;
+  color: #fff;
+  border-color: #444;
 }
 
-button:active {
-  transform: scale(0.97);
+button:disabled {
+  opacity: 0.4;
+}
+
+/* Bee-level filter coloring */
+button[data-level="one"].active {
+  color: #9ad1b3;
+  border-color: #9ad1b3;
+}
+
+button[data-level="two"].active {
+  color: #9fb7e3;
+  border-color: #9fb7e3;
+}
+
+button[data-level="three"].active {
+  color: #b6a9e6;
+  border-color: #b6a9e6;
+}
+
+button[data-level="wrong"].active {
+  color: #ff8c8c;
+  border-color: #ff8c8c;
 }
 
 /* =========================
-   Table Wrapper
-========================= */
-#table {
-  overflow-x: auto;
-}
-
-/* =========================
-   Table Core
+   Table
 ========================= */
 table {
   width: 100%;
   border-collapse: collapse;
   table-layout: auto;
-  background: #000;
-}
-
-/* =========================
-   Header
-========================= */
-th {
-  font-size: 11px;
-  font-weight: 600;
-  color: #bbb;
-  padding: 6px 6px;
-  background: #0f0f0f;
-  border-bottom: 1px solid #333;
-  white-space: nowrap;
-}
-
-/* =========================
-   Body Cells
-========================= */
-td {
-  padding: 7px 6px;
   font-size: 14px;
-  border-bottom: 1px solid #222;
+}
+
+thead th {
+  background: #111;
+  color: #aaa;
+  font-weight: 600;
+}
+
+th,
+td {
+  border-bottom: 1px solid #1a1a1a;
+  padding: 6px 4px;
   text-align: center;
   white-space: nowrap;
 }
 
-/* =========================
-   Column: #
-========================= */
-th:nth-child(1),
-td:nth-child(1) {
-  width: 52px;
-  text-align: right;
-  font-size: 11px;
-  color: #777;
-  padding-right: 8px;
-}
-
-/* =========================
-   Column: Word (FULL)
-========================= */
-th:nth-child(2),
-td:nth-child(2) {
+td.word {
   text-align: left;
-  font-weight: 600;
-  padding-left: 10px;
   white-space: nowrap;
+  cursor: pointer;
 }
 
 /* =========================
-   Column: Stats
+   Bee Level Accents (Dark)
 ========================= */
-th:nth-child(3),
-td:nth-child(3) {
-  width: 70px;
-  font-size: 12px;
-  color: #aaa;
+tr.level-one td.word {
+  border-left: 4px solid #9ad1b3;
+}
+
+tr.level-two td.word {
+  border-left: 4px solid #9fb7e3;
+}
+
+tr.level-three td.word {
+  border-left: 4px solid #b6a9e6;
+}
+
+/* Priority dots */
+td.word span {
+  margin-left: 6px;
+  font-size: 11px;
+  color: #ff6666;
 }
 
 /* =========================
-   Session Columns
+   Exam Mode
 ========================= */
-th:nth-child(n+4),
-td:nth-child(n+4) {
-  width: 44px;
+body.exam tr.level-one td.word,
+body.exam tr.level-two td.word,
+body.exam tr.level-three td.word {
+  border-left-color: #333;
+}
+
+body.exam td.word span {
+  display: none;
 }
 
 /* =========================
-   Interaction
+   Mobile adjustments
 ========================= */
-td:active {
-  background: #222;
-}
-
-table,
-th,
-td {
-  -webkit-user-select: none;
-  user-select: none;
-  -webkit-tap-highlight-color: transparent;
-}
-
-/* =========================
-   Desktop Center
-========================= */
-@media (min-width: 768px) {
+@media (max-width: 600px) {
   body {
-    max-width: 900px;
-    margin: auto;
+    padding: 8px;
+  }
+
+  table {
+    font-size: 13px;
+  }
+
+  button {
+    font-size: 12px;
+    padding: 5px 8px;
   }
 }
