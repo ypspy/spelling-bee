@@ -18,11 +18,18 @@ const WordSchema = new mongoose.Schema({
     index: true
   },
 
-  // ⭐️ 새로 추가
+  // ⭐️ 중요도 (이미 있음)
   priority: {
     type: Number,
     default: 0,      // 0=기본, 1=중요, 2=핵심
     index: true
+  },
+
+  // ⭐️ 북마크 (추가)
+  bookmarked: {
+    type: Boolean,
+    default: false,
+    index: true       // 북마크 검색/점프 성능용
   },
 
   active: {

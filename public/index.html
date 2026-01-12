@@ -23,14 +23,18 @@
 
   <!-- Difficulty / Session Filters -->
   <div id="filters">
-    <button data-level="all" class="active">All</button>
-    <button data-level="one">One</button>
-    <button data-level="two">Two</button>
-    <button data-level="three">Three</button>
-    <button data-level="wrong">직전 오답</button>
-    <button data-level="today">오늘 연습</button>
-    <button id="examModeBtn">시험 모드</button>
+    <div>
+      <button data-type="level" data-level="all" class="active">All</button>
+      <button data-type="level" data-level="one">One</button>
+      <button data-type="level" data-level="two">Two</button>
+      <button data-type="level" data-level="three">Three</button>
+    </div>
+    <div>
+      <button data-type="mode" data-mode="wrong">직전 오답</button>
+      <button data-type="mode" data-mode="today">오늘 연습</button>
+    </div>   
   </div>
+
 
   <!-- Controls (관리자용) -->
   <div id="controls">
