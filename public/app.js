@@ -63,7 +63,7 @@ async function toggleBookmark(wordId, value) {
   });
 }
 
-/* ★ HIDE 전용 helper (추가) */
+/* ★ HIDE helper */
 async function hideWord(wordId) {
   await fetch(`/words/${wordId}/hide`, {
     method: "PATCH"
@@ -74,7 +74,6 @@ async function hideWord(wordId) {
    Filter Wiring
 ========================= */
 function wireFilters() {
-  // Level
   document
     .querySelectorAll('#filters button[data-type="level"]')
     .forEach(btn => {
@@ -91,7 +90,6 @@ function wireFilters() {
       };
     });
 
-  // Mode
   document
     .querySelectorAll('#filters button[data-type="mode"]')
     .forEach(btn => {
@@ -105,7 +103,6 @@ function wireFilters() {
       };
     });
 
-  // Alphabet
   alphabetFilterDiv.onclick = e => {
     if (e.target.tagName !== "BUTTON") return;
 
@@ -145,7 +142,6 @@ async function loadTable() {
   const res = await fetch("/table");
   const { words, sessions, records, statsByWord } = await res.json();
 
-  /* Alphabet buttons */
   const alphabets = Array.from(
     new Set(words.map(w => w.alphabet).filter(Boolean))
   ).sort();
@@ -166,13 +162,11 @@ async function loadTable() {
     alphabetFilterDiv.appendChild(btn);
   });
 
-  /* Record Map */
   const recordMap = {};
   records.forEach(r => {
     recordMap[`${r.wordId}_${r.sessionId}`] = r.result;
   });
 
-  /* Filtering */
   let filtered = words.filter(w => {
     if (filters.alphabet !== "all" && w.alphabet !== filters.alphabet)
       return false;
@@ -199,14 +193,10 @@ async function loadTable() {
     return a.text.localeCompare(b.text);
   });
 
-  /* Pagination */
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const start = currentPage * PAGE_SIZE;
   const pageWords = filtered.slice(start, start + PAGE_SIZE);
 
-  /* =========================
-     Table
-  ========================= */
   const table = document.createElement("table");
   const thead = document.createElement("thead");
   const hr = document.createElement("tr");
@@ -232,7 +222,7 @@ async function loadTable() {
     const tr = document.createElement("tr");
     tr.classList.add(`level-${w.level}`);
 
-    /* ---------- # : Bookmark ---------- */
+    /* # : Bookmark */
     const numTd = document.createElement("td");
     numTd.innerText = `${start + i + 1}/${filtered.length}`;
     numTd.style.cursor = "pointer";
@@ -249,7 +239,7 @@ async function loadTable() {
 
     tr.appendChild(numTd);
 
-    /* ---------- Word ---------- */
+    /* Word */
     const wordTd = document.createElement("td");
     wordTd.className = "word";
     wordTd.innerText = w.text;
@@ -270,7 +260,7 @@ async function loadTable() {
 
     tr.appendChild(wordTd);
 
-    /* ---------- Stats : Edit / HIDE ---------- */
+    /* Stats : Edit / HIDE */
     const stat = statsByWord[w._id] || { success: 0, attempts: 0 };
     const statTd = document.createElement("td");
     statTd.innerText = `${stat.success}/${stat.attempts}`;
@@ -293,16 +283,15 @@ async function loadTable() {
         if (save) {
           const newText = input.value.trim();
 
-          /* 🔒 HIDE 명령 */
           if (newText.toUpperCase() === "HIDE") {
             const ok = confirm("이 단어를 숨기시겠습니까?");
             if (ok) {
               await hideWord(w._id);
             }
+            input.onblur = null; // ✅ 핵심 수정
             return loadTable();
           }
 
-          /* 기존 수정 */
           if (newText && newText !== w.text) {
             await updateWordText(w._id, newText);
           }
@@ -320,7 +309,7 @@ async function loadTable() {
 
     tr.appendChild(statTd);
 
-    /* ---------- Records ---------- */
+    /* Records */
     sessions.forEach(s => {
       const td = document.createElement("td");
       const val = recordMap[`${w._id}_${s._id}`];
@@ -343,9 +332,6 @@ async function loadTable() {
   tableDiv.innerHTML = "";
   tableDiv.appendChild(table);
 
-  /* =========================
-     Pager
-  ========================= */
   const pager = document.createElement("div");
   pager.style.marginTop = "12px";
   pager.style.textAlign = "left";
@@ -368,7 +354,6 @@ async function loadTable() {
 
   const bookmarkBtn = document.createElement("button");
   bookmarkBtn.innerText = "북마크";
-
   bookmarkBtn.onclick = () => {
     const startIdx = (currentPage + 1) * PAGE_SIZE;
     let idx = filtered.slice(startIdx).findIndex(w => w.bookmarked);
