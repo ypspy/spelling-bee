@@ -19,7 +19,8 @@ router.post("/", async (req, res) => {
       level,
       alphabet: alphabet ? alphabet.toUpperCase() : undefined,
       priority: 0,
-      active: true
+      active: true,
+      bookmarked: false
     });
 
     res.json(word);
@@ -63,6 +64,32 @@ router.patch("/:id", async (req, res) => {
     await word.save();
 
     res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * ⭐ PATCH /words/:id/bookmark
+ * 북마크 on/off
+ */
+router.patch("/:id/bookmark", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { value } = req.body;
+
+    const word = await Word.findById(id);
+    if (!word) {
+      return res.status(404).json({ error: "Word not found" });
+    }
+
+    word.bookmarked = !!value;
+    await word.save();
+
+    res.json({
+      success: true,
+      bookmarked: word.bookmarked
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
