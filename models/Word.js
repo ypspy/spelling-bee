@@ -34,12 +34,19 @@ const WordSchema = new mongoose.Schema({
 
   active: {
     type: Boolean,
-    default: true
+    default: true,
+    index: true
   },
 
   source: {
     type: String,
     default: "bulk-v2"
+  },
+
+  // 한국어 뜻 (초등학교 3-5학년 수준)
+  meaning: {
+    type: String,
+    default: ""
   }
 
 }, { timestamps: true });

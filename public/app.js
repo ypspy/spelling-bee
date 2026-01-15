@@ -10,7 +10,7 @@ let currentPage = 0;
 ========================= */
 let filters = {
   alphabet: "all",
-  level: "all",
+  level: "one",  // 기본값을 "one"으로 변경
   mode: {
     wrong: false,
     today: false,
@@ -21,11 +21,40 @@ let filters = {
 /* =========================
    Google TTS
 ========================= */
-function speak(text) {
+function speak(text, lang = "en") {
   if (window._ttsAudio) window._ttsAudio.pause();
-  const audio = new Audio(`/tts?text=${encodeURIComponent(text)}`);
+  const audio = new Audio(`/tts?text=${encodeURIComponent(text)}&lang=${lang}`);
   window._ttsAudio = audio;
-  audio.play();
+  return new Promise((resolve, reject) => {
+    audio.onended = () => resolve();
+    audio.onerror = () => reject();
+    audio.play();
+  });
+}
+
+/* =========================
+   단어 발음 + 뜻풀이 재생
+========================= */
+async function speakWordWithMeaning(word) {
+  try {
+    // 1. 영어 발음 재생
+    await speak(word.text, "en");
+    
+    // 2. 한국어 뜻이 없으면 가져오기
+    let meaning = word.meaning;
+    if (!meaning) {
+      const res = await fetch(`/translation/${word._id}`);
+      const data = await res.json();
+      meaning = data.meaning;
+    }
+    
+    // 3. 한국어 뜻풀이 재생
+    if (meaning) {
+      await speak(meaning, "ko");
+    }
+  } catch (err) {
+    console.error("Speak error:", err);
+  }
 }
 
 /* =========================
@@ -138,9 +167,28 @@ if (examModeBtn) {
 /* =========================
    Main Render
 ========================= */
-async function loadTable() {
+let cachedData = null;
+let lastFetchTime = 0;
+const CACHE_DURATION = 1000; // 1초 캐시
+
+async function loadTable(forceRefresh = false) {
+  const now = Date.now();
+  
+  // 캐시된 데이터가 있고 1초 이내면 재사용 (빠른 연속 클릭 방지)
+  if (!forceRefresh && cachedData && (now - lastFetchTime) < CACHE_DURATION) {
+    renderTable(cachedData);
+    return;
+  }
+
   const res = await fetch("/table");
-  const { words, sessions, records, statsByWord } = await res.json();
+  const data = await res.json();
+  cachedData = data;
+  lastFetchTime = now;
+  
+  renderTable(data);
+}
+
+function renderTable({ words, sessions, records, statsByWord }) {
 
   const alphabets = Array.from(
     new Set(words.map(w => w.alphabet).filter(Boolean))
@@ -234,7 +282,7 @@ async function loadTable() {
 
     numTd.onclick = e => {
       e.stopPropagation();
-      toggleBookmark(w._id, !w.bookmarked).then(loadTable);
+      toggleBookmark(w._id, !w.bookmarked).then(() => loadTable(true));
     };
 
     tr.appendChild(numTd);
@@ -253,9 +301,10 @@ async function loadTable() {
 
     wordTd.onclick = e => {
       if (filters.mode.exam) return speak(w.text);
-      if (e.shiftKey) return updatePriority(w._id, +1).then(loadTable);
-      if (e.altKey) return updatePriority(w._id, -1).then(loadTable);
-      speak(w.text);
+      if (e.shiftKey) return updatePriority(w._id, +1).then(() => loadTable(true));
+      if (e.altKey) return updatePriority(w._id, -1).then(() => loadTable(true));
+      // 단어 클릭 시 발음 + 뜻풀이 재생
+      speakWordWithMeaning(w);
     };
 
     tr.appendChild(wordTd);
@@ -289,14 +338,14 @@ async function loadTable() {
               await hideWord(w._id);
             }
             input.onblur = null; // ✅ 핵심 수정
-            return loadTable();
+            return loadTable(true);
           }
 
           if (newText && newText !== w.text) {
             await updateWordText(w._id, newText);
           }
         }
-        loadTable();
+        loadTable(true);
       };
 
       input.onkeydown = e => {
@@ -317,7 +366,7 @@ async function loadTable() {
       if (val === "fail") td.innerText = "✕";
 
       if (s.status === "open" && !filters.mode.exam) {
-        td.onclick = () => toggleRecord(w._id, s._id).then(loadTable);
+        td.onclick = () => toggleRecord(w._id, s._id).then(() => loadTable(true));
       } else {
         td.style.opacity = "0.35";
       }

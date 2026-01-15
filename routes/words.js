@@ -35,7 +35,10 @@ router.post("/", async (req, res) => {
  */
 router.get("/", async (req, res) => {
   try {
-    const words = await Word.find({ active: true }).sort({ createdAt: 1 });
+    const words = await Word.find({ active: true })
+      .select("text alphabet level priority bookmarked active meaning createdAt")
+      .sort({ createdAt: 1 })
+      .lean();
     res.json(words);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -55,13 +58,15 @@ router.patch("/:id", async (req, res) => {
       return res.status(400).json({ error: "No text" });
     }
 
-    const word = await Word.findById(id);
+    const word = await Word.findByIdAndUpdate(
+      id,
+      { text: text.trim().toLowerCase() },
+      { new: true, runValidators: true }
+    );
+
     if (!word) {
       return res.status(404).json({ error: "Word not found" });
     }
-
-    word.text = text.trim().toLowerCase();
-    await word.save();
 
     res.json({ success: true });
   } catch (err) {
@@ -78,18 +83,74 @@ router.patch("/:id/bookmark", async (req, res) => {
     const { id } = req.params;
     const { value } = req.body;
 
-    const word = await Word.findById(id);
+    const word = await Word.findByIdAndUpdate(
+      id,
+      { bookmarked: !!value },
+      { new: true }
+    );
+
     if (!word) {
       return res.status(404).json({ error: "Word not found" });
     }
-
-    word.bookmarked = !!value;
-    await word.save();
 
     res.json({
       success: true,
       bookmarked: word.bookmarked
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * ⭐ PATCH /words/:id/priority
+ * 우선순위 증가/감소
+ */
+router.patch("/:id/priority", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { delta } = req.body;
+
+    if (typeof delta !== "number") {
+      return res.status(400).json({ error: "delta must be a number" });
+    }
+
+    const word = await Word.findById(id).select("priority");
+    if (!word) {
+      return res.status(404).json({ error: "Word not found" });
+    }
+
+    const currentPriority = word.priority || 0;
+    const newPriority = Math.max(0, Math.min(2, currentPriority + delta));
+
+    await Word.findByIdAndUpdate(id, { priority: newPriority });
+
+    res.json({ success: true, priority: newPriority });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * ⭐ PATCH /words/:id/meaning
+ * 한국어 뜻 업데이트
+ */
+router.patch("/:id/meaning", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { meaning } = req.body;
+
+    const word = await Word.findByIdAndUpdate(
+      id,
+      { meaning: meaning || "" },
+      { new: true }
+    );
+
+    if (!word) {
+      return res.status(404).json({ error: "Word not found" });
+    }
+
+    res.json({ success: true, meaning: word.meaning });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -103,13 +164,15 @@ router.patch("/:id/hide", async (req, res) => {
   try {
     const { id } = req.params;
 
-    const word = await Word.findById(id);
+    const word = await Word.findByIdAndUpdate(
+      id,
+      { active: false },
+      { new: true }
+    );
+
     if (!word) {
       return res.status(404).json({ error: "Word not found" });
     }
-
-    word.active = false;
-    await word.save();
 
     res.json({ success: true });
   } catch (err) {

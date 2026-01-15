@@ -7,17 +7,32 @@ const client = new textToSpeech.TextToSpeechClient();
 router.get("/", async (req, res) => {
   try {
     const text = (req.query.text || "").trim();
+    const lang = (req.query.lang || "en").toLowerCase(); // 언어 파라미터 추가
+    
     if (!text) return res.status(400).send("No text");
+
+    // 언어에 따라 음성 설정
+    let voiceConfig;
+    if (lang === "ko" || lang === "kr") {
+      // 한국어 음성
+      voiceConfig = {
+        languageCode: "ko-KR",
+        name: "ko-KR-Wavenet-A"  // 한국어 여성 음성
+      };
+    } else {
+      // 영어 음성 (기본)
+      voiceConfig = {
+        languageCode: "en-US",
+        name: "en-US-Wavenet-D"
+      };
+    }
 
     const request = {
       input: { text },
-      voice: {
-        languageCode: "en-US",
-        name: "en-US-Wavenet-D"   // ⭐ Google Translate급
-      },
+      voice: voiceConfig,
       audioConfig: {
         audioEncoding: "MP3",
-        speakingRate: 0.9
+        speakingRate: lang === "ko" ? 0.85 : 0.9  // 한국어는 조금 느리게
       }
     };
 

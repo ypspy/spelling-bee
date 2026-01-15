@@ -28,12 +28,13 @@ router.post("/", async (req, res) => {
 
     const date = today();
 
-    // 2. 오늘 날짜 기준 마지막 sequence 조회
-    const last = await Session.find({ date })
+    // 2. 오늘 날짜 기준 마지막 sequence 조회 (최적화: 필요한 필드만)
+    const last = await Session.findOne({ date })
+      .select("sequence")
       .sort({ sequence: -1 })
-      .limit(1);
+      .lean();
 
-    const nextSeq = last.length ? last[0].sequence + 1 : 1;
+    const nextSeq = last ? last.sequence + 1 : 1;
 
     // 3. 새 세션 생성
     const session = await Session.create({
@@ -58,7 +59,9 @@ router.post("/", async (req, res) => {
 router.get("/", async (req, res) => {
   try {
     const sessions = await Session.find()
-      .sort({ date: -1, sequence: -1 });
+      .select("sessionId date sequence status")
+      .sort({ date: -1, sequence: -1 })
+      .lean();
 
     res.json(sessions);
   } catch (err) {
@@ -80,9 +83,11 @@ router.get("/", async (req, res) => {
  */
 router.delete("/current", async (req, res) => {
   try {
-    // 1. 현재 open 세션 찾기
+    // 1. 현재 open 세션 찾기 (필요한 필드만)
     const current = await Session.findOne({ status: "open" })
-      .sort({ date: -1, sequence: -1 });
+      .select("_id sessionId")
+      .sort({ date: -1, sequence: -1 })
+      .lean();
 
     if (!current) {
       return res.status(400).json({ error: "No open session" });
@@ -96,6 +101,7 @@ router.delete("/current", async (req, res) => {
 
     // 4. 가장 최신 posted 세션을 open으로 복구
     const prev = await Session.findOne({ status: "posted" })
+      .select("_id sessionId")
       .sort({ date: -1, sequence: -1 });
 
     if (prev) {

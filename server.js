@@ -10,6 +10,7 @@ const recordRoutes = require("./routes/records");
 const statsRoutes = require("./routes/stats");
 const tableRoutes = require("./routes/table");
 const ttsRoutes = require("./routes/tts");
+const translationRoutes = require("./routes/translation");
 
 // middleware
 app.use(express.json());
@@ -22,6 +23,7 @@ app.use("/records", recordRoutes);
 app.use("/stats", statsRoutes);
 app.use("/table", tableRoutes);
 app.use("/tts", ttsRoutes);
+app.use("/translation", translationRoutes);
 
 // MongoDB 연결
 mongoose.connect(process.env.MONGO_URI)

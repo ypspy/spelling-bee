@@ -44,10 +44,11 @@ router.post("/toggle", async (req, res) => {
       record.result = "fail";
       await record.save();
 
-      const word = await Word.findById(wordId);
+      // 우선순위 증가 (최대 2)
+      const word = await Word.findById(wordId).select("priority");
       if (word) {
-        word.priority = Math.min(2, (word.priority || 0) + 1);
-        await word.save();
+        const newPriority = Math.min(2, (word.priority || 0) + 1);
+        await Word.findByIdAndUpdate(wordId, { priority: newPriority });
       }
 
       return res.json(record);
@@ -59,10 +60,11 @@ router.post("/toggle", async (req, res) => {
     if (record.result === "fail") {
       await Record.deleteOne({ _id: record._id });
 
-      const word = await Word.findById(wordId);
+      // 우선순위 감소 (최소 0)
+      const word = await Word.findById(wordId).select("priority");
       if (word) {
-        word.priority = Math.max(0, (word.priority || 0) - 1);
-        await word.save();
+        const newPriority = Math.max(0, (word.priority || 0) - 1);
+        await Word.findByIdAndUpdate(wordId, { priority: newPriority });
       }
 
       return res.json({ canceled: true });
