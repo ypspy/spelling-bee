@@ -26,6 +26,9 @@ router.get("/:wordId", async (req, res) => {
     if (!word) {
       return res.status(404).json({ error: "Word not found" });
     }
+
+    // full이 아니고 meaning이 있으면 DB에서 반환
+    if (!includeFull && word.meaning) {
       return res.json({ meaning: word.meaning });
     }
 

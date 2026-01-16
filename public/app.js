@@ -29,8 +29,11 @@ function speak(text, lang = "en") {
   window._ttsAudio = audio;
   return new Promise((resolve, reject) => {
     audio.onended = () => resolve();
-    audio.onerror = () => reject();
-    audio.play();
+    audio.onerror = (e) => {
+      console.error("TTS error:", e);
+      reject(e);
+    };
+    audio.play().catch(reject);
   });
 }
 
