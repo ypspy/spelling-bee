@@ -28,7 +28,7 @@ router.get("/:wordId", async (req, res) => {
     }
 
     // 뜻이 없거나 full 요청이면 번역 API를 통해 가져오기
-    console.log("Fetching translation for:", englishWord, "includeFull:", includeFull);
+    console.log("Fetching translation for:", word.text, "includeFull:", includeFull);
     const result = await fetchKoreanMeaning(word.text);
     console.log("Fetch result:", result);
     const meaning = result?.meaning || "";
