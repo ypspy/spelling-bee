@@ -1,8 +1,18 @@
 const express = require("express");
 const router = express.Router();
 const textToSpeech = require("@google-cloud/text-to-speech");
+const fs = require("fs");
+const path = require("path");
 
-const client = new textToSpeech.TextToSpeechClient();
+// Google Cloud credentials 설정
+let credentials = undefined;
+if (process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64) {
+  // Base64로 인코딩된 credentials 디코딩
+  const credentialsJson = Buffer.from(process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64, 'base64').toString('utf8');
+  credentials = JSON.parse(credentialsJson);
+}
+
+const client = new textToSpeech.TextToSpeechClient({ credentials });
 
 router.get("/", async (req, res) => {
   try {
