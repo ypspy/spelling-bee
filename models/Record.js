@@ -8,6 +8,6 @@ const RecordSchema = new mongoose.Schema({
 });
 
 // 복합 인덱스: wordId + sessionId 조회 최적화
-RecordSchema.index({ wordId: 1, sessionId: 1 });
+RecordSchema.index({ wordId: 1, sessionId: 1 }, { unique: true });
 
 module.exports = mongoose.model("Record", RecordSchema);

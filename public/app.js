@@ -1,6 +1,8 @@
 const tableDiv = document.getElementById("table");
 const alphabetFilterDiv = document.getElementById("alphabetFilters");
 const examModeBtn = document.getElementById("examModeBtn");
+const addSessionBtn = document.getElementById("addSession");
+const deleteSessionBtn = document.getElementById("deleteSession");
 
 const PAGE_SIZE = 10;
 let currentPage = 0;
@@ -33,24 +35,21 @@ function speak(text, lang = "en") {
 }
 
 /* =========================
-   단어 발음 + 뜻풀이 재생
+   한국어 부르는 말 + 뜻풀이 재생
 ========================= */
-async function speakWordWithMeaning(word) {
+async function speakKoreanDefinition(word) {
   try {
-    // 1. 영어 발음 재생
-    await speak(word.text, "en");
-    
-    // 2. 한국어 뜻이 없으면 가져오기
-    let meaning = word.meaning;
-    if (!meaning) {
-      const res = await fetch(`/translation/${word._id}`);
-      const data = await res.json();
-      meaning = data.meaning;
+    const res = await fetch(`/translation/${word._id}?full=1`);
+    const data = await res.json();
+    const nickname = data.nickname || "";
+    const definition = data.definition || data.meaning || "";
+
+    if (nickname) {
+      await speak(nickname, "ko");
     }
-    
-    // 3. 한국어 뜻풀이 재생
-    if (meaning) {
-      await speak(meaning, "ko");
+
+    if (definition) {
+      await speak(definition, "ko");
     }
   } catch (err) {
     console.error("Speak error:", err);
@@ -97,6 +96,32 @@ async function hideWord(wordId) {
   await fetch(`/words/${wordId}/hide`, {
     method: "PATCH"
   });
+}
+
+/* =========================
+   Session Helpers
+========================= */
+async function createSession() {
+  const res = await fetch("/sessions", { method: "POST" });
+  if (!res.ok) {
+    const msg = await res.text().catch(() => "세션 생성 실패");
+    alert(msg);
+    return;
+  }
+  loadTable(true);
+}
+
+async function deleteCurrentSession() {
+  const ok = confirm("현재 열린 세션을 삭제할까요?");
+  if (!ok) return;
+
+  const res = await fetch("/sessions/current", { method: "DELETE" });
+  if (!res.ok) {
+    const msg = await res.text().catch(() => "세션 삭제 실패");
+    alert(msg);
+    return;
+  }
+  loadTable(true);
 }
 
 /* =========================
@@ -162,6 +187,14 @@ if (examModeBtn) {
     document.body.classList.toggle("exam", filters.mode.exam);
     loadTable();
   };
+}
+
+if (addSessionBtn) {
+  addSessionBtn.onclick = () => createSession();
+}
+
+if (deleteSessionBtn) {
+  deleteSessionBtn.onclick = () => deleteCurrentSession();
 }
 
 /* =========================
@@ -299,12 +332,26 @@ function renderTable({ words, sessions, records, statsByWord }) {
       wordTd.appendChild(dot);
     }
 
+    let clickTimer = null;
+    const CLICK_DELAY = 250;
+
     wordTd.onclick = e => {
       if (filters.mode.exam) return speak(w.text);
       if (e.shiftKey) return updatePriority(w._id, +1).then(() => loadTable(true));
       if (e.altKey) return updatePriority(w._id, -1).then(() => loadTable(true));
-      // 단어 클릭 시 발음 + 뜻풀이 재생
-      speakWordWithMeaning(w);
+
+      if (clickTimer) clearTimeout(clickTimer);
+      clickTimer = setTimeout(() => {
+        speak(w.text, "en");
+        clickTimer = null;
+      }, CLICK_DELAY);
+    };
+
+    wordTd.ondblclick = e => {
+      if (filters.mode.exam) return;
+      if (clickTimer) clearTimeout(clickTimer);
+      clickTimer = null;
+      speakKoreanDefinition(w);
     };
 
     tr.appendChild(wordTd);

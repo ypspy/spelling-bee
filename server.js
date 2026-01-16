@@ -25,10 +25,11 @@ app.use("/table", tableRoutes);
 app.use("/tts", ttsRoutes);
 app.use("/translation", translationRoutes);
 
-// MongoDB 연결
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log("MongoDB connected"))
-  .catch(err => console.error(err));
+// MongoDB 연결 (centralized)
+const db = require('./lib/db');
+db.connect()
+  .then(() => console.log('MongoDB connected'))
+  .catch(err => console.error('MongoDB connection error:', err.message));
 
 // 테스트용
 app.get("/health", (req, res) => {
