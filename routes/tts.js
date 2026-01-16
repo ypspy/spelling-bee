@@ -5,12 +5,19 @@ const fs = require("fs");
 const path = require("path");
 const Word = require("../models/Word");
 
+// 개발 환경에서만 로그 표시
+const isDev = process.env.NODE_ENV !== "production";
+const log = (...args) => isDev && console.log(...args);
+
 // Google Cloud credentials 설정
 let credentials = undefined;
 if (process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64) {
-  // Base64로 인코딩된 credentials 디코딩
-  const credentialsJson = Buffer.from(process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64, 'base64').toString('utf8');
-  credentials = JSON.parse(credentialsJson);
+  try {
+    const credentialsJson = Buffer.from(process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64, 'base64').toString('utf8');
+    credentials = JSON.parse(credentialsJson);
+  } catch (err) {
+    log("Failed to parse TTS credentials:", err.message);
+  }
 }
 
 const client = new textToSpeech.TextToSpeechClient({ credentials });
@@ -18,32 +25,32 @@ const client = new textToSpeech.TextToSpeechClient({ credentials });
 router.get("/", async (req, res) => {
   try {
     const text = (req.query.text || "").trim();
-    const lang = (req.query.lang || "en").toLowerCase(); // 언어 파라미터 추가
-    
-    if (!text) return res.status(400).send("No text");
+    const lang = (req.query.lang || "en").toLowerCase();
+
+    if (!text || text.length > 500) {
+      return res.status(400).send("Invalid text");
+    }
+
+    // 지원하는 언어 검증
+    if (!["en", "ko", "kr"].includes(lang)) {
+      return res.status(400).send("Unsupported language");
+    }
 
     // 언어에 따라 음성 설정
-    let voiceConfig;
-    if (lang === "ko" || lang === "kr") {
-      // 한국어 음성
-      voiceConfig = {
-        languageCode: "ko-KR",
-        name: "ko-KR-Wavenet-A"  // 한국어 여성 음성
-      };
-    } else {
-      // 영어 음성 (기본)
-      voiceConfig = {
-        languageCode: "en-US",
-        name: "en-US-Wavenet-D"
-      };
-    }
+    const voiceConfig = (lang === "ko" || lang === "kr") ? {
+      languageCode: "ko-KR",
+      name: "ko-KR-Wavenet-A"
+    } : {
+      languageCode: "en-US",
+      name: "en-US-Wavenet-D"
+    };
 
     const request = {
       input: { text },
       voice: voiceConfig,
       audioConfig: {
         audioEncoding: "MP3",
-        speakingRate: lang === "ko" ? 0.85 : 0.9  // 한국어는 조금 느리게
+        speakingRate: lang === "ko" ? 0.85 : 0.9
       }
     };
 
@@ -51,13 +58,13 @@ router.get("/", async (req, res) => {
 
     res.set({
       "Content-Type": "audio/mpeg",
-      "Cache-Control": "public, max-age=86400" // 하루 캐시
+      "Cache-Control": "public, max-age=86400"
     });
 
     res.send(response.audioContent);
   } catch (err) {
-    console.error(err);
-    res.status(500).send("TTS error");
+    log("TTS error:", err.message);
+    res.status(500).send("TTS service unavailable");
   }
 });
 
@@ -68,27 +75,30 @@ router.get("/", async (req, res) => {
 router.get("/word/:wordId", async (req, res) => {
   try {
     const { wordId } = req.params;
-    
+
+    if (!wordId || !wordId.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).send("Invalid word ID");
+    }
+
     const word = await Word.findById(wordId).select("meaning");
     if (!word || !word.meaning) {
       return res.status(404).send("Word or meaning not found");
     }
 
     const text = word.meaning.trim();
-    if (!text) return res.status(400).send("No meaning text");
-
-    // 한국어 음성 설정
-    const voiceConfig = {
-      languageCode: "ko-KR",
-      name: "ko-KR-Wavenet-A"  // 한국어 여성 음성
-    };
+    if (!text || text.length > 500) {
+      return res.status(400).send("Invalid meaning text");
+    }
 
     const request = {
       input: { text },
-      voice: voiceConfig,
+      voice: {
+        languageCode: "ko-KR",
+        name: "ko-KR-Wavenet-A"
+      },
       audioConfig: {
         audioEncoding: "MP3",
-        speakingRate: 0.85  // 한국어는 조금 느리게
+        speakingRate: 0.85
       }
     };
 
@@ -96,13 +106,13 @@ router.get("/word/:wordId", async (req, res) => {
 
     res.set({
       "Content-Type": "audio/mpeg",
-      "Cache-Control": "public, max-age=86400" // 하루 캐시
+      "Cache-Control": "public, max-age=86400"
     });
 
     res.send(response.audioContent);
   } catch (err) {
-    console.error(err);
-    res.status(500).send("TTS error");
+    log("TTS word error:", err.message);
+    res.status(500).send("TTS service unavailable");
   }
 });
 

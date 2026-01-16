@@ -3,8 +3,12 @@ const router = express.Router();
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const Word = require("../models/Word");
 
+// 개발 환경에서만 로그 표시
+const isDev = process.env.NODE_ENV !== "production";
+const log = (...args) => isDev && console.log(...args);
+
 // Gemini API 초기화
-const genAI = process.env.GEMINI_API_KEY 
+const genAI = process.env.GEMINI_API_KEY
   ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
   : null;
 
@@ -16,13 +20,12 @@ router.get("/:wordId", async (req, res) => {
   try {
     const { wordId } = req.params;
     const includeFull = req.query.full === "1";
-    
-    const word = await Word.findById(wordId).select("text meaning nickname definition");
-    console.log("Word found:", word);
-    console.log("includeFull:", includeFull);
-    if (word) {
-      console.log("word.nickname:", word.nickname, "word.definition:", word.definition);
+
+    if (!wordId || !wordId.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ error: "Invalid word ID" });
     }
+
+    const word = await Word.findById(wordId).select("text meaning nickname definition");
     if (!word) {
       return res.status(404).json({ error: "Word not found" });
     }
@@ -34,18 +37,15 @@ router.get("/:wordId", async (req, res) => {
 
     // full 요청이고 nickname/definition이 있으면 DB에서 반환
     if (includeFull && word.nickname && word.definition) {
-      console.log("Returning from DB:", { meaning: word.meaning, nickname: word.nickname, definition: word.definition });
-      return res.json({ 
-        meaning: word.meaning, 
-        nickname: word.nickname, 
-        definition: word.definition 
+      return res.json({
+        meaning: word.meaning,
+        nickname: word.nickname,
+        definition: word.definition
       });
     }
 
     // 뜻이 없거나 full 요청이면 번역 API를 통해 가져오기
-    console.log("Fetching translation for:", word.text, "includeFull:", includeFull);
     const result = await fetchKoreanMeaning(word.text);
-    console.log("Fetch result:", result);
     const meaning = result?.meaning || "";
     
     // DB에 저장 (처음 생성 시)
@@ -55,14 +55,13 @@ router.get("/:wordId", async (req, res) => {
 
     if (includeFull) {
       const parsed = parseDefinition(result?.raw || "");
-      console.log("Parsed:", parsed);
       return res.json({ meaning, raw: result?.raw || "", ...parsed });
     }
 
     res.json({ meaning });
   } catch (err) {
-    console.error("Translation error:", err);
-    res.status(500).json({ error: err.message });
+    log("Translation error:", err.message);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -142,7 +141,6 @@ async function fetchKoreanMeaning(englishWord) {
       if (simpleMeaning) {
         const cleaned = sanitizeMeaning(simpleMeaning);
         if (cleaned) {
-          console.log("Gemini raw output:", raw);
           return { meaning: cleaned, raw };
         }
       }

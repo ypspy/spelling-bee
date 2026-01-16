@@ -24,15 +24,19 @@ let filters = {
    Google TTS
 ========================= */
 function speak(text, lang = "en") {
-  if (window._ttsAudio) window._ttsAudio.pause();
+  if (!text || typeof text !== "string") return Promise.reject(new Error("Invalid text"));
+
+  if (window._ttsAudio) {
+    window._ttsAudio.pause();
+    window._ttsAudio = null;
+  }
+
   const audio = new Audio(`/tts?text=${encodeURIComponent(text)}&lang=${lang}`);
   window._ttsAudio = audio;
+
   return new Promise((resolve, reject) => {
     audio.onended = () => resolve();
-    audio.onerror = (e) => {
-      console.error("TTS error:", e);
-      reject(e);
-    };
+    audio.onerror = (e) => reject(new Error("TTS playback failed"));
     audio.play().catch(reject);
   });
 }
@@ -41,23 +45,21 @@ function speak(text, lang = "en") {
    한국어 뜻 재생 (meaning만)
 ========================= */
 async function speakKoreanDefinition(word) {
-  try {
-    console.log("Speaking Korean meaning for word:", word.text);
-    // DB의 meaning을 TTS로 읽어주기
-    if (window._ttsAudio) window._ttsAudio.pause();
-    const audio = new Audio(`/tts/word/${word._id}`);
-    window._ttsAudio = audio;
-    return new Promise((resolve, reject) => {
-      audio.onended = () => resolve();
-      audio.onerror = (e) => {
-        console.error("TTS error:", e);
-        reject(e);
-      };
-      audio.play().catch(reject);
-    });
-  } catch (err) {
-    console.error("Speak error:", err);
+  if (!word || !word._id) return;
+
+  if (window._ttsAudio) {
+    window._ttsAudio.pause();
+    window._ttsAudio = null;
   }
+
+  const audio = new Audio(`/tts/word/${word._id}`);
+  window._ttsAudio = audio;
+
+  return new Promise((resolve, reject) => {
+    audio.onended = () => resolve();
+    audio.onerror = (e) => reject(new Error("Meaning TTS failed"));
+    audio.play().catch(reject);
+  });
 }
 
 /* =========================
