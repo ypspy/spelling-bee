@@ -189,7 +189,7 @@ async function main() {
       { nickname: { $in: [null, ""] } },
       { definition: { $in: [null, ""] } }
     ]
-  }).select("_id text").limit(5); // 테스트용으로 5개만
+  }).select("_id text");
 
   console.log(`Found ${words.length} words without meaning.`);
 
