@@ -23,24 +23,24 @@ router.get("/:wordId", async (req, res) => {
     }
 
     // 이미 뜻이 있으면 반환
-    if (word.meaning) {
-      if (includeFull) {
-        return res.json({ meaning: word.meaning, raw: "" });
-      }
+    if (word.meaning && !includeFull) {
       return res.json({ meaning: word.meaning });
     }
 
-    // 뜻이 없으면 번역 API를 통해 가져오기
+    // 뜻이 없거나 full 요청이면 번역 API를 통해 가져오기
+    console.log("Fetching translation for:", englishWord, "includeFull:", includeFull);
     const result = await fetchKoreanMeaning(word.text);
+    console.log("Fetch result:", result);
     const meaning = result?.meaning || "";
     
-    // DB에 저장
-    if (meaning) {
+    // DB에 저장 (처음 생성 시)
+    if (!word.meaning && meaning) {
       await Word.findByIdAndUpdate(wordId, { meaning });
     }
 
     if (includeFull) {
       const parsed = parseDefinition(result?.raw || "");
+      console.log("Parsed:", parsed);
       return res.json({ meaning, raw: result?.raw || "", ...parsed });
     }
 

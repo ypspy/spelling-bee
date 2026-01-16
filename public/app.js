@@ -39,16 +39,22 @@ function speak(text, lang = "en") {
 ========================= */
 async function speakKoreanDefinition(word) {
   try {
+    console.log("Speaking Korean definition for word:", word.text);
     const res = await fetch(`/translation/${word._id}?full=1`);
     const data = await res.json();
+    console.log("Translation data:", data);
     const nickname = data.nickname || "";
     const definition = data.definition || data.meaning || "";
 
+    console.log("Nickname:", nickname, "Definition:", definition);
+
+    // 항상 nickname + definition 순차 재생
     if (nickname) {
+      console.log("Speaking nickname:", nickname);
       await speak(nickname, "ko");
     }
-
     if (definition) {
+      console.log("Speaking definition:", definition);
       await speak(definition, "ko");
     }
   } catch (err) {

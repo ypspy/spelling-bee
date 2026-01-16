@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
+    "populate-meanings": "node scripts/populate_meanings.js",
     "clear-meanings": "node scripts/clear_meanings.js --yes"
   },
   "keywords": [],
