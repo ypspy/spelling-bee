@@ -38,28 +38,23 @@ function speak(text, lang = "en") {
 }
 
 /* =========================
-   한국어 부르는 말 + 뜻풀이 재생
+   한국어 뜻 재생 (meaning만)
 ========================= */
 async function speakKoreanDefinition(word) {
   try {
-    console.log("Speaking Korean definition for word:", word.text);
-    const res = await fetch(`/translation/${word._id}?full=1`);
-    const data = await res.json();
-    console.log("Translation data:", data);
-    const nickname = data.nickname || "";
-    const definition = data.definition || data.meaning || "";
-
-    console.log("Nickname:", nickname, "Definition:", definition);
-
-    // 항상 nickname + definition 순차 재생
-    if (nickname) {
-      console.log("Speaking nickname:", nickname);
-      await speak(nickname, "ko");
-    }
-    if (definition) {
-      console.log("Speaking definition:", definition);
-      await speak(definition, "ko");
-    }
+    console.log("Speaking Korean meaning for word:", word.text);
+    // DB의 meaning을 TTS로 읽어주기
+    if (window._ttsAudio) window._ttsAudio.pause();
+    const audio = new Audio(`/tts/word/${word._id}`);
+    window._ttsAudio = audio;
+    return new Promise((resolve, reject) => {
+      audio.onended = () => resolve();
+      audio.onerror = (e) => {
+        console.error("TTS error:", e);
+        reject(e);
+      };
+      audio.play().catch(reject);
+    });
   } catch (err) {
     console.error("Speak error:", err);
   }
