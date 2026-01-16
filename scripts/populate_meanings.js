@@ -189,7 +189,7 @@ async function main() {
       { nickname: { $in: [null, ""] } },
       { definition: { $in: [null, ""] } }
     ]
-  }).select("_id text");
+  }).select("_id text").limit(5); // 테스트용으로 5개만
 
   console.log(`Found ${words.length} words without meaning.`);
 
@@ -200,12 +200,13 @@ async function main() {
       if (result?.meaning) {
         // parseDefinition으로 nickname과 definition 추출
         const parsed = parseDefinition(result.raw || "");
+        console.log("Parsed for", word.text, ":", parsed);
         await Word.findByIdAndUpdate(word._id, { 
           meaning: result.meaning,
           nickname: parsed.nickname || "",
           definition: parsed.definition || ""
         });
-        console.log(`Updated ${word.text}: ${result.meaning}`);
+        console.log(`Updated ${word.text}: meaning=${result.meaning}, nickname=${parsed.nickname}, definition=${parsed.definition}`);
       } else {
         console.log(`Failed to get meaning for ${word.text}`);
       }
