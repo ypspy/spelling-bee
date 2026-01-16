@@ -17,7 +17,7 @@ router.get("/:wordId", async (req, res) => {
     const { wordId } = req.params;
     const includeFull = req.query.full === "1";
     
-    const word = await Word.findById(wordId).select("text meaning");
+    const word = await Word.findById(wordId).select("text meaning nickname definition");
     if (!word) {
       return res.status(404).json({ error: "Word not found" });
     }
@@ -25,6 +25,15 @@ router.get("/:wordId", async (req, res) => {
     // 이미 뜻이 있으면 반환
     if (word.meaning && !includeFull) {
       return res.json({ meaning: word.meaning });
+    }
+
+    // full 요청이고 nickname/definition이 있으면 DB에서 반환
+    if (includeFull && word.nickname && word.definition) {
+      return res.json({ 
+        meaning: word.meaning, 
+        nickname: word.nickname, 
+        definition: word.definition 
+      });
     }
 
     // 뜻이 없거나 full 요청이면 번역 API를 통해 가져오기

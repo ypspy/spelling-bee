@@ -47,6 +47,18 @@ const WordSchema = new mongoose.Schema({
   meaning: {
     type: String,
     default: ""
+  },
+
+  // 부르는 말 (nickname)
+  nickname: {
+    type: String,
+    default: ""
+  },
+
+  // 간단한 뜻 (definition)
+  definition: {
+    type: String,
+    default: ""
   }
 
 }, { timestamps: true });

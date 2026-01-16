@@ -145,16 +145,51 @@ function sanitizeMeaning(text) {
   return text.replace(/[^\w\s가-힣]/g, "").trim();
 }
 
-function simplifyForElementary(text) {
-  // 간단한 한국어로 변환 (필요 시 확장)
-  return text;
+function parseDefinition(raw) {
+  if (!raw) return {};
+
+  const lines = raw
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(Boolean);
+
+  const pickValue = (label) => {
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const match = line.match(new RegExp(`^${label}\\s*[:：]\\s*(.*)$`));
+      if (match) {
+        if (match[1]) return match[1].trim();
+        if (lines[i + 1]) return lines[i + 1].trim();
+      }
+    }
+    return "";
+  };
+
+  const word = pickValue("단어");
+  const nickname = pickValue("부르는 말");
+  const definition = pickValue("간단한 뜻");
+  const pronunciation = pickValue("발음");
+
+  return {
+    word,
+    nickname,
+    definition,
+    pronunciation
+  };
 }
 
 async function main() {
   await db.connect();
 
-  // level이 "one"이고 meaning이 없는 단어들
-  const words = await Word.find({ level: "one", meaning: { $in: [null, ""] } }).select("_id text");
+  // level이 "one"이고 meaning이 없는 단어들 (또는 nickname/definition 없는 경우)
+  const words = await Word.find({
+    level: "one",
+    $or: [
+      { meaning: { $in: [null, ""] } },
+      { nickname: { $in: [null, ""] } },
+      { definition: { $in: [null, ""] } }
+    ]
+  }).select("_id text");
 
   console.log(`Found ${words.length} words without meaning.`);
 
@@ -163,7 +198,13 @@ async function main() {
     try {
       const result = await fetchKoreanMeaning(word.text);
       if (result?.meaning) {
-        await Word.findByIdAndUpdate(word._id, { meaning: result.meaning });
+        // parseDefinition으로 nickname과 definition 추출
+        const parsed = parseDefinition(result.raw || "");
+        await Word.findByIdAndUpdate(word._id, { 
+          meaning: result.meaning,
+          nickname: parsed.nickname || "",
+          definition: parsed.definition || ""
+        });
         console.log(`Updated ${word.text}: ${result.meaning}`);
       } else {
         console.log(`Failed to get meaning for ${word.text}`);
