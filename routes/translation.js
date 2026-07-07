@@ -2,6 +2,15 @@ const express = require("express");
 const router = express.Router();
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const Word = require("../models/Word");
+const WordlyWord = require("../models/WordlyWord");
+
+async function findWordById(wordId) {
+  const daily = await Word.findById(wordId).select("text meaning");
+  if (daily) return { doc: daily, model: Word };
+  const ww = await WordlyWord.findById(wordId).select("text meaning");
+  if (ww) return { doc: ww, model: WordlyWord };
+  return null;
+}
 
 // 개발 환경에서만 로그 표시
 const isDev = process.env.NODE_ENV !== "production";
@@ -22,14 +31,15 @@ router.get("/:wordId", async (req, res) => {
     if (!wordId || !wordId.match(/^[0-9a-fA-F]{24}$/)) {
       return res.status(400).json({ error: "Invalid word ID" });
     }
-    const word = await Word.findById(wordId).select("text meaning");
-    if (!word) return res.status(404).json({ error: "Word not found" });
+    const found = await findWordById(wordId);
+    if (!found) return res.status(404).json({ error: "Word not found" });
 
-    if (word.meaning) return res.json({ meaning: word.meaning });
+    const { doc, model } = found;
+    if (doc.meaning) return res.json({ meaning: doc.meaning });
 
-    const result = await fetchKoreanMeaning(word.text);
+    const result = await fetchKoreanMeaning(doc.text);
     const meaning = result?.meaning || "";
-    if (meaning) await Word.findByIdAndUpdate(wordId, { meaning });
+    if (meaning) await model.findByIdAndUpdate(wordId, { meaning });
     res.json({ meaning });
   } catch (err) {
     log("Translation error:", err.message);
