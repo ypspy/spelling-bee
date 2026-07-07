@@ -19,45 +19,17 @@ const genAI = process.env.GEMINI_API_KEY
 router.get("/:wordId", async (req, res) => {
   try {
     const { wordId } = req.params;
-    const includeFull = req.query.full === "1";
-
     if (!wordId || !wordId.match(/^[0-9a-fA-F]{24}$/)) {
       return res.status(400).json({ error: "Invalid word ID" });
     }
+    const word = await Word.findById(wordId).select("text meaning");
+    if (!word) return res.status(404).json({ error: "Word not found" });
 
-    const word = await Word.findById(wordId).select("text meaning nickname definition");
-    if (!word) {
-      return res.status(404).json({ error: "Word not found" });
-    }
+    if (word.meaning) return res.json({ meaning: word.meaning });
 
-    // full이 아니고 meaning이 있으면 DB에서 반환
-    if (!includeFull && word.meaning) {
-      return res.json({ meaning: word.meaning });
-    }
-
-    // full 요청이고 nickname/definition이 있으면 DB에서 반환
-    if (includeFull && word.nickname && word.definition) {
-      return res.json({
-        meaning: word.meaning,
-        nickname: word.nickname,
-        definition: word.definition
-      });
-    }
-
-    // 뜻이 없거나 full 요청이면 번역 API를 통해 가져오기
     const result = await fetchKoreanMeaning(word.text);
     const meaning = result?.meaning || "";
-    
-    // DB에 저장 (처음 생성 시)
-    if (!word.meaning && meaning) {
-      await Word.findByIdAndUpdate(wordId, { meaning });
-    }
-
-    if (includeFull) {
-      const parsed = parseDefinition(result?.raw || "");
-      return res.json({ meaning, raw: result?.raw || "", ...parsed });
-    }
-
+    if (meaning) await Word.findByIdAndUpdate(wordId, { meaning });
     res.json({ meaning });
   } catch (err) {
     log("Translation error:", err.message);
@@ -258,39 +230,6 @@ function sanitizeMeaning(text) {
   if (!/[가-힣]/.test(out)) return "";
 
   return out;
-}
-
-function parseDefinition(raw) {
-  if (!raw) return {};
-
-  const lines = raw
-    .split(/\r?\n/)
-    .map(line => line.trim())
-    .filter(Boolean);
-
-  const pickValue = (label) => {
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      const match = line.match(new RegExp(`^${label}\\s*[:：]\\s*(.*)$`));
-      if (match) {
-        if (match[1]) return match[1].trim();
-        if (lines[i + 1]) return lines[i + 1].trim();
-      }
-    }
-    return "";
-  };
-
-  const word = pickValue("단어");
-  const nickname = pickValue("부르는 말");
-  const definition = pickValue("간단한 뜻");
-  const pronunciation = pickValue("발음");
-
-  return {
-    word,
-    nickname,
-    definition,
-    pronunciation
-  };
 }
 
 module.exports = router;
