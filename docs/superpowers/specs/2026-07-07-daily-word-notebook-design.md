@@ -80,13 +80,17 @@ Remove or deprecate: `scripts/populate_meanings.js`, `scripts/clear_meanings.js`
 
 ### Indexes
 
-- `{ addedDate: -1, text: 1 }` — date-range queries and duplicate check per day
-- `{ text: 1 }` — optional lookup
+- `{ addedDate: -1, text: 1 }` — date-range queries
+- `{ text: 1, addedDate: 1 }` — **unique** compound index (prevents duplicate double-tap race)
 
 ### Constraints
 
-- Duplicate prevention: same `text` + `addedDate` returns 409 Conflict
-- `addedDate` is sent by the client using local KST date (`YYYY-MM-DD`)
+- Duplicate prevention: unique index on `text` + `addedDate`; API returns 409 Conflict on duplicate key error
+- `addedDate` must be today's date in `Asia/Seoul` (server validates; rejects past/future dates with 400)
+- `text` validation (applied after trim + lowercase):
+  - Length: 1–40 characters
+  - Pattern: `/^[a-z]+(?:[-'][a-z]+)*$/` (single English word; hyphens/apostrophes allowed, e.g. `well-known`, `don't`)
+  - No spaces; reject with 400 "한 단어만 입력해 주세요"
 
 ### Date Window Logic
 
@@ -100,6 +104,10 @@ Remove or deprecate: `scripts/populate_meanings.js`, `scripts/clear_meanings.js`
 
 Returns words in date range, sorted by `addedDate` descending then `text` ascending.
 
+**Server-side range clamp (enforces Non-Goal):** Regardless of client input, the server computes `today` in `Asia/Seoul`, sets `maxFrom = today - 3 days`, and clamps the effective query to `[maxFrom, today]`. Requests for older dates never return data outside the 4-day window.
+
+The production client always sends explicit `from`/`to` computed in KST. The server default (`from` = today - 3, `to` = today) exists only for direct API/testing use and uses `Asia/Seoul`.
+
 Response:
 
 ```json
@@ -110,20 +118,20 @@ Response:
 }
 ```
 
-Default behavior when query omitted: compute `from` = today - 3 days, `to` = today (server can accept client-sent dates for timezone accuracy).
-
 ### `POST /words`
 
 Body: `{ "text": "apple", "addedDate": "2026-07-07" }`
 
 - Normalize `text` to lowercase trimmed
-- Validate `addedDate` format
-- Reject duplicate (`text` + `addedDate`)
+- Validate `text` per constraints above
+- Validate `addedDate` is `YYYY-MM-DD` and equals today in `Asia/Seoul` (400 if not)
+- Reject duplicate via unique index (409)
+- Disable add button in UI while request is in-flight (prevents double-tap)
 - Return created word with empty `meaning`
 
 ### `DELETE /words/:id`
 
-Delete a single word (for typo correction). Validate ObjectId.
+Delete a single word (for typo correction). Validate ObjectId. No cascade — `Record` model is removed; delete word only.
 
 ### `GET /translation/:wordId` (existing, keep)
 
@@ -165,8 +173,16 @@ All `/sessions`, `/records`, `/stats`, `/table`, and `/tts/word/:wordId` routes.
 |--------|----------|
 | Tap word / speaker icon | Play English TTS |
 | Tap "뜻 보기" / meaning row | Toggle meaning visibility (accordion per card) |
-| Swipe left or long-press | Delete word (confirm dialog) — pick one pattern during implementation |
-| Add button | POST word, then GET translation, update card |
+| Long-press card (500ms) | Show delete confirm dialog; on confirm, DELETE word |
+| Add button | POST word, then GET translation, update card (disabled while in-flight) |
+
+### Empty State
+
+When no words exist in the 4-day window:
+
+- Show date sections for today only (or hide empty past-day headers)
+- Centered message: "아직 추가한 단어가 없어요" with subtitle "위에서 영어 단어를 입력해 보세요"
+- Input bar remains active
 
 ### Meaning Display
 
@@ -197,7 +213,7 @@ All `/sessions`, `/records`, `/stats`, `/table`, and `/tts/word/:wordId` routes.
 
 ### `routes/words.js`
 
-Rewrite to support simplified CRUD and date-range query only.
+Rewrite to support simplified CRUD and date-range query only. Remove `Record` import and cascade delete from existing DELETE handler.
 
 ### `routes/translation.js`
 
@@ -213,13 +229,20 @@ Rewrite to support simplified CRUD and date-range query only.
 
 ### `scripts/reset_db.js` (new)
 
-One-time script to:
+One-time script using raw Mongoose connection (`lib/db.js`), **not** deleted Session/Record models:
 
-1. `deleteMany({})` on words, sessions, records collections (or drop collections)
-2. Log counts cleared
-3. Require `--yes` flag to prevent accidental runs
+1. Connect via `lib/db.js`
+2. `mongoose.connection.db.collection(name).deleteMany({})` for `words`, `sessions`, `records`
+3. Log counts cleared per collection
+4. Require `--yes` flag to prevent accidental runs
 
-Run once before first use of the new app.
+**Deploy order:**
+
+1. Deploy new code (with simplified Word schema and deleted models/routes)
+2. Run `node scripts/reset_db.js --yes` once against the target database
+3. Verify empty app loads correctly
+
+The script tolerates missing `sessions`/`records` collections (logs skip, continues).
 
 ## Error Handling
 
@@ -261,6 +284,7 @@ Run once before first use of the new app.
 | `public/app.js` | Rewrite for daily notebook |
 | `public/style.css` | Mobile-first restyle |
 | `scripts/reset_db.js` | New |
+| `package.json` | Remove `populate-meanings` / `clear-meanings` scripts; add `reset-db` script |
 | `.github/copilot-instructions.md` | Update to reflect new architecture |
 
 ## Decisions Log
@@ -275,4 +299,5 @@ Run once before first use of the new app.
 | TTS | English only on word tap |
 | Platform | Mobile and tablet first |
 | Legacy data | Full wipe (Option A) |
+| Delete interaction | Long-press → confirm dialog |
 | Approach | Simplify existing codebase |
