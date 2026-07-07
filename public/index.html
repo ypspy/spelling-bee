@@ -1,51 +1,48 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1, maximum-scale=1"
-  />
-  <title>Spelling Bee</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>오늘의 단어장</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <nav class="tab-bar">
+    <button type="button" class="tab active" data-tab="daily">오늘의 단어장</button>
+    <button type="button" class="tab" data-tab="ww">Wordly Wise</button>
+  </nav>
 
-  <h1>Spelling Bee</h1>
+  <div id="dailyPanel">
+    <header class="header">
+      <h1>오늘의 단어장</h1>
+    </header>
 
-  <!-- Alphabet Filter (JS에서 동적 생성) -->
-  <div id="alphabetFilters"></div>
+    <form id="addForm" class="add-bar">
+      <input id="wordInput" class="word-input" type="text" placeholder="영어 단어" autocomplete="off" autocapitalize="off" />
+      <button type="submit" id="addBtn" class="add-btn">+</button>
+    </form>
 
-  <!-- <br>
-  <textarea id="bulkWords" rows="10" style="width:100%"></textarea>
-  <button id="bulkAddWords">벌크 입력</button>
-  <br> -->
+    <div id="offlineMsg" class="offline hidden">오프라인입니다</div>
+    <main id="wordList"></main>
+  </div>
 
-  <!-- Difficulty / Session Filters -->
-  <div id="filters">
-    <div>
-      <button data-type="level" data-level="all">All</button>
-      <button data-type="level" data-level="one" class="active">One</button>
-      <button data-type="level" data-level="two">Two</button>
-      <button data-type="level" data-level="three">Three</button>
+  <div id="wwPanel" class="hidden">
+    <div class="ww-selectors">
+      <label>Book <select id="wwBookSelect"></select></label>
+      <label>Lesson <select id="wwLessonSelect"></select></label>
     </div>
-    <div>
-      <button data-type="mode" data-mode="wrong">직전 오답</button>
-      <button data-type="mode" data-mode="today">오늘 연습</button>
-    </div>   
+    <div id="wwRecentLessons" class="recent-lessons hidden"></div>
+    <form id="wwAddForm" class="add-bar">
+      <input id="wwWordInput" class="word-input" type="text" placeholder="영어 단어" autocomplete="off" autocapitalize="off" />
+      <button type="submit" id="wwAddBtn" class="add-btn">+</button>
+    </form>
+    <h2 id="wwLessonTitle" class="lesson-title"></h2>
+    <main id="wwWordList"></main>
   </div>
 
-
-  <!-- Controls (관리자용) -->
-  <div id="controls">
-    <!-- <button id="addWord">+ 단어</button> -->
-    <button id="addSession">+ 세션</button>
-    <button id="deleteSession">- 세션</button>
-  </div>
-
-  <!-- Table -->
-  <div id="table"></div>
-
+  <script src="shared.js"></script>
+  <script src="daily.js"></script>
+  <script src="ww.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
