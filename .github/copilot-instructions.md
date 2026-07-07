@@ -1,70 +1,82 @@
-# Copilot instructions — Spelling Bee (Node + Express + MongoDB)
+# Copilot instructions — Daily Word Notebook (오늘의 단어장)
 
 Purpose: quick, actionable guidance for AI coding agents to be immediately productive in this codebase.
 
 - **Big picture**
-  - This is a single-process Node/Express app serving a small SPA in `public/` and a REST API under `routes/`.
-  - Persistent store is MongoDB via `mongoose` (`models/Word.js`, `models/Session.js`, `models/Record.js`).
-  - Key routes: `server.js` registers routers mounted at `/sessions`, `/words`, `/records`, `/stats`, `/table`, `/tts`, `/translation`.
+  - Mobile-first daily English word notebook. Users add words for today, browse a rolling 4-day window, and fetch Korean meanings + TTS on demand.
+  - Single-process Node/Express app serving a vanilla JS SPA in `public/` and a REST API under `routes/`.
+  - Persistent store is MongoDB via `mongoose` (`models/Word.js` only — no Session, Record, or legacy spelling-bee models).
+  - Key routes in `server.js`: `/words`, `/translation`, `/tts`, `/health`. No `/sessions`, `/records`, `/stats`, or `/table`.
   - External services:
-    - Google Text-to-Speech via `@google-cloud/text-to-speech` (`routes/tts.js`). Uses application default credentials or `GOOGLE_APPLICATION_CREDENTIALS` pointing to the provided `spelling-bee-tts-b2b438fa4805.json` file.
-    - Google Generative AI (Gemini) via `@google/generative-ai` in `routes/translation.js`. Controlled by `GEMINI_API_KEY` env var; the route falls back to public translation APIs if Gemini is unavailable.
+    - Google Text-to-Speech via `@google-cloud/text-to-speech` (`routes/tts.js`). English only.
+    - Google Generative AI (Gemini) via `@google/generative-ai` in `routes/translation.js`. Falls back to LibreTranslate and MyMemory if Gemini is unavailable.
 
-- **Important data conventions (follow these when editing/adding features)**
-  - Words are stored normalized: `text` is saved as lowercase (see `routes/words.js` POST/patch). Preserve casing rules when inserting/updating.
-  - `alphabet` is stored uppercase. `level` is enum: `one|two|three`.
-  - `priority`: 0=default, 1=important, 2=core. Bound between 0 and 2 by existing endpoints.
-  - `bookmarked` and `active` are boolean flags used for filtering; many queries explicitly use `active: true` (e.g. GET `/words`).
-  - Deleting a `Word` route also deletes related `Record` documents (`routes/words.js` DELETE) — preserve this application-level cascade or replicate it when adding features.
+- **Word model (`models/Word.js`)**
+  - Fields: `text` (lowercase, required), `meaning` (string, default `""`), `addedDate` (YYYY-MM-DD, required).
+  - Unique index on `{ text, addedDate }`. Do not add legacy fields (`alphabet`, `level`, `priority`, `bookmarked`, `active`, etc.).
 
-- **API / code patterns to match**
-  - Use `findByIdAndUpdate(id, update, { new: true, runValidators: true })` when appropriate — existing routes rely on `new:true` and validators.
-  - When returning lists, prefer `.select(...).sort(...).lean()` for lightweight responses (seen in `routes/words.js`).
-  - Error handling: routes typically return `res.status(500).json({ error: err.message })`. Follow this convention rather than throwing raw errors.
-  - Input normalization: trim and `toLowerCase()` for `text`; `alphabet` is uppercased if provided.
+- **Date & validation helpers**
+  - `lib/date.js` — KST date utilities: `todayKST()`, `isValidDateStr()`, `clampWordRange(from, to)`.
+  - `lib/validate.js` — `normalizeText()`, `validateWordText()` (single English word, ≤40 chars).
+  - Server enforces a 4-day window: today + 3 prior days (KST). `clampWordRange` is applied on GET `/words`; POST rejects any `addedDate` other than today.
+
+- **API patterns to match**
+  - GET `/words?from=YYYY-MM-DD&to=YYYY-MM-DD` — returns `{ words }` clamped to the 4-day window.
+  - POST `/words` — body `{ text, addedDate }`; `addedDate` must equal `todayKST()`. Creates word with empty `meaning`.
+  - DELETE `/words/:id` — removes a single word by ObjectId.
+  - GET `/translation/:wordId` — returns cached `meaning` or generates via Gemini, then saves.
+  - GET `/tts?text=hello&lang=en` — returns `audio/mpeg`; `lang` must be `en`.
+  - Error handling: routes return `res.status(...).json({ error: ... })`. Follow this convention.
 
 - **Key files to inspect when making changes**
   - `server.js` — route registration, middleware, Mongo connection
-  - `routes/words.js`, `routes/sessions.js`, `routes/records.js`, `routes/tts.js`, `routes/translation.js`
-  - `models/Word.js`, `models/Session.js`, `models/Record.js`
+  - `routes/words.js`, `routes/translation.js`, `routes/tts.js`
+  - `models/Word.js`
+  - `lib/date.js`, `lib/validate.js`, `lib/db.js`
   - `public/` — front-end assets served statically
   - `package.json` — scripts and dependency list
 
 - **Dev / run / debug workflow**
   - Install deps: `npm install`.
-  - Local development: set environment variables in `.env` (create one if missing):
+  - Local development: set environment variables in `.env`:
     - `MONGO_URI` (required)
     - optional: `GEMINI_API_KEY`, `PORT`
-    - set `GOOGLE_APPLICATION_CREDENTIALS` to the path of `spelling-bee-tts-b2b438fa4805.json` if running TTS locally.
-  - Start dev server with live reload: `npm run dev` (uses `nodemon`). Production/test: `npm start`.
-  - Health check: GET `/health` returns `OK`.
+    - TTS credentials: `GOOGLE_APPLICATION_CREDENTIALS` (path to JSON) **or** `GOOGLE_APPLICATION_CREDENTIALS_BASE64`
+  - Start dev server with live reload: `npm run dev` (uses `nodemon`). Production: `npm start`.
+  - Health check: GET `/health` returns `{ status: "OK", timestamp: ... }`.
+  - DB migration / reset: stop the server first, then `npm run reset-db` (drops all collections via `scripts/reset_db.js`).
 
 - **External integrations & secrets**
-  - Google TTS: uses `@google-cloud/text-to-speech`. If tests or CI run need TTS, ensure a service account JSON is available and `GOOGLE_APPLICATION_CREDENTIALS` points to it.
-  - Gemini: `GEMINI_API_KEY` toggles use of `@google/generative-ai` in `routes/translation.js`. If missing, the route falls back to LibreTranslate and MyMemory.
+  - Google TTS: uses `@google-cloud/text-to-speech`. Provide credentials via file path or base64 env var.
+  - Gemini: `GEMINI_API_KEY` enables AI-generated Korean meanings in `routes/translation.js`.
 
 - **Safe change guidance (project-specific)**
-  - Maintain existing field normalizations (lowercase `text`, uppercase `alphabet`). Many client-side UI features assume these formats.
-  - Preserve index usage in `models/*.js`. If you add queries, prefer using indexed fields (`text`, `alphabet`, `level`, `priority`, `bookmarked`, `active`) to avoid performance regressions.
-  - When removing or permanently deleting words, ensure associated `Record` documents are removed (current code calls `Record.deleteMany({ wordId: id })`).
-  - Avoid changing route mounts in `server.js` without updating `public/app.js` if the front-end depends on specific endpoints.
+  - Preserve lowercase `text` normalization and YYYY-MM-DD `addedDate` format.
+  - Keep the 4-day KST window logic in `lib/date.js`; do not move date clamping to the client only.
+  - POST is today-only — do not allow backdating words without an explicit product decision.
+  - Avoid changing route mounts in `server.js` without updating `public/app.js`.
 
 - **Concrete examples**
-  - Add a word (follow `routes/words.js`):
+  - Add a word today:
 
     POST /words
-    Body: { "text": "Apple", "level": "one", "alphabet": "a" }
+    Body: { "text": "Apple", "addedDate": "2026-07-07" }
 
-    Server creates `text` => `apple`, `alphabet` => `A`.
+    Server creates `text` => `apple`, `meaning` => `""`.
 
-  - TTS example:
+  - Fetch words for a date range:
+
+    GET /words?from=2026-07-04&to=2026-07-07
+
+    Server clamps to the allowed 4-day KST window and returns `{ words: [...] }`.
+
+  - TTS:
 
     GET /tts?text=hello&lang=en
 
-    Responds with `audio/mpeg` (MP3) from Google TTS client.
+    Responds with `audio/mpeg` (MP3).
 
 - **What not to assume**
-  - There are no automated tests in the repo; rely on manual testing and `nodemon` during development.
-  - The repo expects environment-driven credentials; do not hardcode keys or service account JSON contents.
-
-If anything above is unclear or you'd like more detail on a specific area (storage patterns, API examples, or how the translation fallbacks behave), tell me which section to expand and I'll iterate.
+  - No automated tests; rely on manual testing and `nodemon` during development.
+  - No Session, Record, stats, or table routes — do not reintroduce them.
+  - Environment-driven credentials only; do not hardcode keys or service account JSON.
