@@ -1,244 +1,291 @@
 /* =========================
-   Base (Dark Mode)
+   Base — mobile-first dark
 ========================= */
-* {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   margin: 0;
   padding: 12px;
-  padding-left: calc(12px + 3in);   /* 전체 바디 indent */
+  padding-top: calc(12px + env(safe-area-inset-top, 0px));
+  padding-right: calc(12px + env(safe-area-inset-right, 0px));
+  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  padding-left: calc(12px + env(safe-area-inset-left, 0px));
   background: #000;
   color: #fff;
-
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
-               Roboto, Helvetica, Arial, sans-serif;
-
-  font-size: 24px;   /* 전체 1.5배 */
-}
-
-h1 {
-  font-size: 30px;
-  margin-bottom: 18px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+  font-size: 18px;
+  line-height: 1.4;
+  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 /* =========================
-   Controls
+   Header
 ========================= */
-#controls {
-  margin-bottom: 18px;
+.header {
+  margin-bottom: 12px;
 }
 
-#filters,
-#alphabetFilters {
+.header h1 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* =========================
+   Add bar
+========================= */
+.add-bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
   display: flex;
-  flex-wrap: wrap;
-  gap: 9px;
-  margin-bottom: 9px;
+  gap: 8px;
+  background: #000;
+  padding: 8px 0 12px;
+  margin-bottom: 8px;
 }
 
-button {
+#wordInput {
+  flex: 1;
+  min-height: 44px;
+  padding: 0 14px;
   background: #111;
-  color: #ccc;
-  border: 1px solid #222;
-
-  padding: 9px 15px;
-  border-radius: 9px;
-  font-size: 19.5px;
-}
-
-button:hover {
-  background: #1a1a1a;
-}
-
-button.active {
-  background: #222;
   color: #fff;
+  border: 1px solid #222;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-family: inherit;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+#wordInput::placeholder {
+  color: #666;
+}
+
+#wordInput:focus {
   border-color: #444;
 }
 
-button:disabled {
-  opacity: 0.4;
-}
-
-/* Bee-level filter coloring */
-button[data-level="one"].active {
-  color: #9ad1b3;
-  border-color: #9ad1b3;
-}
-
-button[data-level="two"].active {
-  color: #9fb7e3;
-  border-color: #9fb7e3;
-}
-
-button[data-level="three"].active {
-  color: #b6a9e6;
-  border-color: #b6a9e6;
-}
-
-button[data-level="wrong"].active {
-  color: #ff8c8c;
-  border-color: #ff8c8c;
-}
-
-/* =========================
-   Table
-========================= */
-table {
-  width: auto;
-  max-width: none;
-  border-collapse: collapse;
-  table-layout: auto;
-
-  font-size: 21px;        /* 테이블 기본 */
-  margin-left: 0;
-  margin-right: auto;
-}
-
-thead th {
+#addBtn {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 16px;
   background: #111;
-  color: #aaa;
-  font-weight: 600;
-}
-
-th,
-td {
-  border-bottom: 1px solid #1a1a1a;
-  padding: 9px 15px;
-  text-align: center;
-  white-space: nowrap;
-}
-
-/* 번호 컬럼 (#) */
-th:first-child,
-td:first-child {
-  padding-right: 12px;
-  color: #666;
-  font-size: 18px;
-}
-
-/* =========================
-   Word 컬럼 (핵심)
-========================= */
-td.word {
-  text-align: left;
-  white-space: nowrap;
-  cursor: pointer;
-  padding-right: 27px;
-}
-
-/* 단어 텍스트 (크게, 흰색) */
-td.word > span:not(.bookmark-hit):not(.priority-dot) {
-  font-size: 26px;
-  line-height: 1.25;
   color: #fff;
+  border: 1px solid #222;
+  border-radius: 10px;
+  font-size: 1.25rem;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1;
+}
+
+#addBtn:hover {
+  background: #1a1a1a;
+}
+
+#addBtn:active {
+  background: #222;
 }
 
 /* =========================
-   Bookmark (small dot + big hit area)
+   Date sections
 ========================= */
-.bookmark-hit {
+.date-section {
+  margin-bottom: 16px;
+}
+
+.date-section h2 {
+  margin: 16px 0 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #888;
+  letter-spacing: 0.02em;
+}
+
+.date-section:first-child h2 {
+  margin-top: 0;
+}
+
+/* =========================
+   Word cards
+========================= */
+.word-card {
+  border: 1px solid #222;
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 8px;
+  background: #0a0a0a;
+}
+
+.word-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  min-height: 44px;
+  gap: 8px;
+}
+
+.word-text {
+  flex: 1;
+  font-size: 1.05rem;
+  font-weight: 500;
+  word-break: break-word;
+}
+
+.word-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* =========================
+   Meaning toggle & text
+========================= */
+.meaning-toggle {
+  color: #888;
+  padding: 8px 0;
+  cursor: pointer;
+  font-size: 0.875rem;
+  user-select: none;
+}
+
+.meaning-toggle:hover {
+  color: #aaa;
+}
+
+.meaning-text {
+  padding-left: 4px;
+  color: #ccc;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+/* =========================
+   Speak button
+========================= */
+.speak-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-
-  width: 20px;      /* 클릭 영역 */
-  height: 20px;
-  margin-right: 8px;
-
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 10px;
+  background: transparent;
+  border: none;
+  color: #888;
+  font-size: 1.125rem;
   cursor: pointer;
-}
-
-.bookmark-dot {
-  font-size: 12px;  /* 보이는 점 */
+  border-radius: 8px;
+  font-family: inherit;
   line-height: 1;
-  color: #ffd966;   /* 은은한 노랑 */
-  pointer-events: none;
+}
+
+.speak-btn:hover {
+  color: #ccc;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.speak-btn:active {
+  background: rgba(255, 255, 255, 0.1);
 }
 
 /* =========================
-   Priority dots
+   Empty state
 ========================= */
-.priority-dot {
-  margin-left: 9px;
-  font-size: 16.5px;
-  color: #ff6666;
-}
-
-/* =========================
-   Stats / Session columns
-========================= */
-th:nth-child(3),
-td:nth-child(3) {
+.empty-state {
   text-align: center;
-  padding-left: 15px;
-  padding-right: 21px;
+  color: #666;
+  padding: 48px 16px;
+}
+
+.empty-state .subtitle {
+  display: block;
+  margin-top: 8px;
+  font-size: 0.875rem;
   color: #555;
 }
 
-th:nth-child(n+4),
-td:nth-child(n+4) {
-  min-width: 48px;
-  padding-left: 12px;
-  padding-right: 12px;
+/* =========================
+   Offline warning
+========================= */
+.offline {
+  background: #3d2e00;
+  color: #ffd966;
+  text-align: center;
+  padding: 10px 16px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  font-size: 0.875rem;
+  font-weight: 500;
 }
 
 /* =========================
-   Bee Level Accents
+   Toast snackbar
 ========================= */
-tr.level-one td.word {
-  border-left: 6px solid #9ad1b3;
-}
-
-tr.level-two td.word {
-  border-left: 6px solid #9fb7e3;
-}
-
-tr.level-three td.word {
-  border-left: 6px solid #b6a9e6;
+.toast {
+  position: fixed;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  background: #222;
+  color: #fff;
+  padding: 12px 20px;
+  border-radius: 10px;
+  font-size: 0.9375rem;
+  max-width: calc(100vw - 32px);
+  text-align: center;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
 }
 
 /* =========================
-   Exam Mode
+   Retry button
 ========================= */
-body.exam tr.level-one td.word,
-body.exam tr.level-two td.word,
-body.exam tr.level-three td.word {
-  border-left-color: #333;
+.retry-btn {
+  display: inline;
+  margin-left: 8px;
+  padding: 2px 10px;
+  background: transparent;
+  color: #ffd966;
+  border: 1px solid #665500;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  font-family: inherit;
+  vertical-align: baseline;
 }
 
-body.exam .bookmark-hit,
-body.exam .priority-dot {
+.retry-btn:hover {
+  background: rgba(255, 217, 102, 0.1);
+}
+
+/* =========================
+   Utility
+========================= */
+.hidden {
   display: none;
 }
 
 /* =========================
-   Mobile adjustments
+   Word list container
 ========================= */
-@media (max-width: 900px) {
-  body {
-    padding-left: 12px;   /* 모바일에서는 indent 제거 */
-  }
-}
-
-@media (max-width: 600px) {
-  body {
-    padding: 8px;
-    font-size: 20px;
-  }
-
-  table {
-    font-size: 18px;
-  }
-
-  td.word > span:not(.bookmark-hit):not(.priority-dot) {
-    font-size: 22px;
-  }
-
-  button {
-    font-size: 17px;
-    padding: 8px 12px;
-  }
+#wordList {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
