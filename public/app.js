@@ -1,493 +1,211 @@
-const tableDiv = document.getElementById("table");
-const alphabetFilterDiv = document.getElementById("alphabetFilters");
-const examModeBtn = document.getElementById("examModeBtn");
-const addSessionBtn = document.getElementById("addSession");
-const deleteSessionBtn = document.getElementById("deleteSession");
+const wordInput = document.getElementById("wordInput");
+const addForm = document.getElementById("addForm");
+const addBtn = document.getElementById("addBtn");
+const wordList = document.getElementById("wordList");
+const offlineMsg = document.getElementById("offlineMsg");
 
-const PAGE_SIZE = 10;
-let currentPage = 0;
+const expandedIds = new Set();
+let adding = false;
 
-/* =========================
-   Filter State
-========================= */
-let filters = {
-  alphabet: "all",
-  level: "one",  // 기본값을 "one"으로 변경
-  mode: {
-    wrong: false,
-    today: false,
-    exam: false
-  }
-};
+function todayKST() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric", month: "2-digit", day: "2-digit"
+  }).format(new Date());
+}
 
-/* =========================
-   Google TTS
-========================= */
-function speak(text, lang = "en") {
-  if (!text || typeof text !== "string") return Promise.reject(new Error("Invalid text"));
+function addDays(dateStr, delta) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + delta);
+  return dt.toISOString().slice(0, 10);
+}
 
-  if (window._ttsAudio) {
-    window._ttsAudio.pause();
-    window._ttsAudio = null;
-  }
+function formatMD(dateStr) {
+  const [, m, d] = dateStr.split("-").map(Number);
+  return `${m}/${d}`;
+}
 
-  const audio = new Audio(`/tts?text=${encodeURIComponent(text)}&lang=${lang}`);
+function dateLabel(addedDate) {
+  const today = todayKST();
+  const yesterday = addDays(today, -1);
+  if (addedDate === today) return `오늘 (${formatMD(addedDate)})`;
+  if (addedDate === yesterday) return `어제 (${formatMD(addedDate)})`;
+  return formatMD(addedDate);
+}
+
+function speak(text) {
+  if (window._ttsAudio) { window._ttsAudio.pause(); window._ttsAudio = null; }
+  const audio = new Audio(`/tts?text=${encodeURIComponent(text)}&lang=en`);
   window._ttsAudio = audio;
-
-  return new Promise((resolve, reject) => {
-    audio.onended = () => resolve();
-    audio.onerror = (e) => reject(new Error("TTS playback failed"));
-    audio.play().catch(reject);
-  });
+  return audio.play().catch(() => showToast("발음을 재생할 수 없습니다"));
 }
 
-/* =========================
-   한국어 뜻 재생 (meaning만)
-========================= */
-async function speakKoreanDefinition(word) {
-  if (!word || !word._id) return;
-
-  if (window._ttsAudio) {
-    window._ttsAudio.pause();
-    window._ttsAudio = null;
-  }
-
-  const audio = new Audio(`/tts/word/${word._id}`);
-  window._ttsAudio = audio;
-
-  return new Promise((resolve, reject) => {
-    audio.onended = () => resolve();
-    audio.onerror = (e) => reject(new Error("Meaning TTS failed"));
-    audio.play().catch(reject);
-  });
+function showToast(msg) {
+  const el = document.createElement("div");
+  el.className = "toast";
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2500);
 }
 
-/* =========================
-   API Helpers
-========================= */
-async function toggleRecord(wordId, sessionId) {
-  await fetch("/records/toggle", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ wordId, sessionId })
-  });
-}
-
-async function updatePriority(wordId, delta) {
-  await fetch(`/words/${wordId}/priority`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ delta })
-  });
-}
-
-async function updateWordText(wordId, text) {
-  await fetch(`/words/${wordId}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text })
-  });
-}
-
-async function toggleBookmark(wordId, value) {
-  await fetch(`/words/${wordId}/bookmark`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ value })
-  });
-}
-
-/* ★ HIDE helper */
-async function hideWord(wordId) {
-  await fetch(`/words/${wordId}/hide`, {
-    method: "PATCH"
-  });
-}
-
-/* =========================
-   Session Helpers
-========================= */
-async function createSession() {
-  const res = await fetch("/sessions", { method: "POST" });
-  if (!res.ok) {
-    const msg = await res.text().catch(() => "세션 생성 실패");
-    alert(msg);
-    return;
-  }
-  loadTable(true);
-}
-
-async function deleteCurrentSession() {
-  const ok = confirm("현재 열린 세션을 삭제할까요?");
-  if (!ok) return;
-
-  const res = await fetch("/sessions/current", { method: "DELETE" });
-  if (!res.ok) {
-    const msg = await res.text().catch(() => "세션 삭제 실패");
-    alert(msg);
-    return;
-  }
-  loadTable(true);
-}
-
-/* =========================
-   Filter Wiring
-========================= */
-function wireFilters() {
-  document
-    .querySelectorAll('#filters button[data-type="level"]')
-    .forEach(btn => {
-      btn.onclick = () => {
-        filters.level = btn.dataset.level;
-        currentPage = 0;
-
-        document
-          .querySelectorAll('#filters button[data-type="level"]')
-          .forEach(b => b.classList.remove("active"));
-
-        btn.classList.add("active");
-        loadTable();
-      };
-    });
-
-  document
-    .querySelectorAll('#filters button[data-type="mode"]')
-    .forEach(btn => {
-      btn.onclick = () => {
-        const key = btn.dataset.mode;
-        filters.mode[key] = !filters.mode[key];
-        currentPage = 0;
-
-        btn.classList.toggle("active", filters.mode[key]);
-        loadTable();
-      };
-    });
-
-  alphabetFilterDiv.onclick = e => {
-    if (e.target.tagName !== "BUTTON") return;
-
-    filters.alphabet = e.target.dataset.level;
-    currentPage = 0;
-
-    alphabetFilterDiv
-      .querySelectorAll("button")
-      .forEach(b => b.classList.remove("active"));
-
-    e.target.classList.add("active");
-    loadTable();
-  };
-}
-
-/* =========================
-   Exam Mode
-========================= */
-if (examModeBtn) {
-  examModeBtn.onclick = () => {
-    filters.mode.exam = !filters.mode.exam;
-    currentPage = 0;
-
-    examModeBtn.innerText = filters.mode.exam
-      ? "시험 모드 종료"
-      : "시험 모드";
-
-    document.body.classList.toggle("exam", filters.mode.exam);
-    loadTable();
-  };
-}
-
-if (addSessionBtn) {
-  addSessionBtn.onclick = () => createSession();
-}
-
-if (deleteSessionBtn) {
-  deleteSessionBtn.onclick = () => deleteCurrentSession();
-}
-
-/* =========================
-   Main Render
-========================= */
-let cachedData = null;
-let lastFetchTime = 0;
-const CACHE_DURATION = 1000; // 1초 캐시
-
-async function loadTable(forceRefresh = false) {
-  const now = Date.now();
-  
-  // 캐시된 데이터가 있고 1초 이내면 재사용 (빠른 연속 클릭 방지)
-  if (!forceRefresh && cachedData && (now - lastFetchTime) < CACHE_DURATION) {
-    renderTable(cachedData);
-    return;
-  }
-
-  const res = await fetch("/table");
+async function loadWords() {
+  const today = todayKST();
+  const from = addDays(today, -3);
+  const res = await fetch(`/words?from=${from}&to=${today}`);
   const data = await res.json();
-  cachedData = data;
-  lastFetchTime = now;
-  
-  renderTable(data);
+  renderWords(data.words || []);
 }
 
-function renderTable({ words, sessions, records, statsByWord }) {
+async function fetchMeaning(wordId, cardEl) {
+  const toggle = cardEl.querySelector(".meaning-toggle");
+  toggle.textContent = "뜻 불러오는 중…";
+  try {
+    const res = await fetch(`/translation/${wordId}`);
+    const data = await res.json();
+    const meaning = data.meaning || "";
+    cardEl.dataset.meaning = meaning;
+    cardEl.dataset.meaningState = meaning ? "loaded" : "error";
+    updateMeaningUI(cardEl);
+  } catch {
+    cardEl.dataset.meaningState = "error";
+    updateMeaningUI(cardEl);
+  }
+}
 
-  const alphabets = Array.from(
-    new Set(words.map(w => w.alphabet).filter(Boolean))
-  ).sort();
+function updateMeaningUI(cardEl) {
+  const toggle = cardEl.querySelector(".meaning-toggle");
+  const textEl = cardEl.querySelector(".meaning-text");
+  const state = cardEl.dataset.meaningState;
+  const meaning = cardEl.dataset.meaning || "";
 
-  alphabetFilterDiv.innerHTML = "";
-
-  const allBtn = document.createElement("button");
-  allBtn.innerText = "All";
-  allBtn.dataset.level = "all";
-  if (filters.alphabet === "all") allBtn.classList.add("active");
-  alphabetFilterDiv.appendChild(allBtn);
-
-  alphabets.forEach(a => {
-    const btn = document.createElement("button");
-    btn.innerText = a;
-    btn.dataset.level = a;
-    if (filters.alphabet === a) btn.classList.add("active");
-    alphabetFilterDiv.appendChild(btn);
-  });
-
-  const recordMap = {};
-  records.forEach(r => {
-    recordMap[`${r.wordId}_${r.sessionId}`] = r.result;
-  });
-
-  let filtered = words.filter(w => {
-    if (filters.alphabet !== "all" && w.alphabet !== filters.alphabet)
-      return false;
-    if (filters.level !== "all" && w.level !== filters.level)
-      return false;
-    if (filters.mode.exam && w.priority !== 2)
-      return false;
-
-    if (filters.mode.wrong) {
-      if (sessions.length < 2) return false;
-      if (recordMap[`${w._id}_${sessions[1]._id}`] !== "fail")
-        return false;
-    }
-
-    if (filters.mode.today && w.priority < 1)
-      return false;
-
-    return true;
-  });
-
-  filtered.sort((a, b) => {
-    if (a.alphabet !== b.alphabet)
-      return a.alphabet.localeCompare(b.alphabet);
-    return a.text.localeCompare(b.text);
-  });
-
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const start = currentPage * PAGE_SIZE;
-  const pageWords = filtered.slice(start, start + PAGE_SIZE);
-
-  const table = document.createElement("table");
-  const thead = document.createElement("thead");
-  const hr = document.createElement("tr");
-
-  ["#", "Word", "Stats"].forEach(h => {
-    const th = document.createElement("th");
-    th.innerText = h;
-    hr.appendChild(th);
-  });
-
-  sessions.forEach((s, i) => {
-    const th = document.createElement("th");
-    th.innerText = `T${sessions.length - i}`;
-    hr.appendChild(th);
-  });
-
-  thead.appendChild(hr);
-  table.appendChild(thead);
-
-  const tbody = document.createElement("tbody");
-
-  pageWords.forEach((w, i) => {
-    const tr = document.createElement("tr");
-    tr.classList.add(`level-${w.level}`);
-
-    /* # : Bookmark */
-    const numTd = document.createElement("td");
-    numTd.innerText = `${start + i + 1}/${filtered.length}`;
-    numTd.style.cursor = "pointer";
-
-    if (w.bookmarked) {
-      numTd.style.color = "#ffd966";
-      numTd.style.fontWeight = "600";
-    }
-
-    numTd.onclick = e => {
+  if (state === "loading") {
+    toggle.textContent = "뜻 불러오는 중…";
+    textEl.textContent = "";
+    return;
+  }
+  if (state === "error") {
+    toggle.innerHTML = '뜻을 가져오지 못했습니다 <button type="button" class="retry-btn">재시도</button>';
+    toggle.querySelector(".retry-btn").onclick = (e) => {
       e.stopPropagation();
-      toggleBookmark(w._id, !w.bookmarked).then(() => loadTable(true));
+      cardEl.dataset.meaningState = "loading";
+      fetchMeaning(cardEl.dataset.id, cardEl);
     };
+    return;
+  }
+  toggle.textContent = expandedIds.has(cardEl.dataset.id) ? "▼ 뜻 숨기기" : "▶ 뜻 보기";
+  textEl.textContent = meaning;
+  textEl.classList.toggle("hidden", !expandedIds.has(cardEl.dataset.id));
+}
 
-    tr.appendChild(numTd);
+function renderWords(words) {
+  wordList.innerHTML = "";
+  if (!words.length) {
+    wordList.innerHTML = `
+      <div class="empty-state">
+        <p>아직 추가한 단어가 없어요</p>
+        <p class="subtitle">위에서 영어 단어를 입력해 보세요</p>
+      </div>`;
+    return;
+  }
 
-    /* Word */
-    const wordTd = document.createElement("td");
-    wordTd.className = "word";
-    wordTd.innerText = w.text;
+  const byDate = {};
+  words.forEach(w => {
+    if (!byDate[w.addedDate]) byDate[w.addedDate] = [];
+    byDate[w.addedDate].push(w);
+  });
 
-    if (w.priority > 0) {
-      const dot = document.createElement("span");
-      dot.className = "priority-dot";
-      dot.innerText = " ●".repeat(w.priority);
-      wordTd.appendChild(dot);
-    }
+  Object.keys(byDate).sort((a, b) => b.localeCompare(a)).forEach(date => {
+    const section = document.createElement("section");
+    section.className = "date-section";
+    section.innerHTML = `<h2>${dateLabel(date)}</h2>`;
 
-    let clickTimer = null;
-    const CLICK_DELAY = 250;
+    byDate[date].forEach(w => {
+      const card = document.createElement("article");
+      card.className = "word-card";
+      card.dataset.id = w._id;
+      card.dataset.meaning = w.meaning || "";
+      card.dataset.meaningState = w.meaning ? "loaded" : "loading";
 
-    wordTd.onclick = e => {
-      if (filters.mode.exam) return speak(w.text);
-      if (e.shiftKey) return updatePriority(w._id, +1).then(() => loadTable(true));
-      if (e.altKey) return updatePriority(w._id, -1).then(() => loadTable(true));
+      card.innerHTML = `
+        <div class="word-row">
+          <span class="word-text">${w.text}</span>
+          <button type="button" class="speak-btn" aria-label="발음">🔊</button>
+        </div>
+        <div class="meaning-toggle"></div>
+        <div class="meaning-text hidden"></div>`;
 
-      if (clickTimer) clearTimeout(clickTimer);
-      clickTimer = setTimeout(() => {
-        speak(w.text, "en");
-        clickTimer = null;
-      }, CLICK_DELAY);
-    };
-
-    wordTd.ondblclick = e => {
-      if (filters.mode.exam) return;
-      if (clickTimer) clearTimeout(clickTimer);
-      clickTimer = null;
-      speakKoreanDefinition(w);
-    };
-
-    tr.appendChild(wordTd);
-
-    /* Stats : Edit / HIDE */
-    const stat = statsByWord[w._id] || { success: 0, attempts: 0 };
-    const statTd = document.createElement("td");
-    statTd.innerText = `${stat.success}/${stat.attempts}`;
-    statTd.style.cursor = "pointer";
-
-    statTd.onclick = () => {
-      if (filters.mode.exam) return;
-
-      const input = document.createElement("input");
-      input.type = "text";
-      input.value = w.text;
-      input.style.width = "100%";
-
-      statTd.innerHTML = "";
-      statTd.appendChild(input);
-      input.focus();
-      input.select();
-
-      const finish = async save => {
-        if (save) {
-          const newText = input.value.trim();
-
-          if (newText.toUpperCase() === "HIDE") {
-            const ok = confirm("이 단어를 숨기시겠습니까?");
-            if (ok) {
-              await hideWord(w._id);
-            }
-            input.onblur = null; // ✅ 핵심 수정
-            return loadTable(true);
-          }
-
-          if (newText && newText !== w.text) {
-            await updateWordText(w._id, newText);
-          }
-        }
-        loadTable(true);
+      card.querySelector(".word-row").onclick = () => speak(w.text);
+      card.querySelector(".meaning-toggle").onclick = (e) => {
+        e.stopPropagation();
+        if (card.dataset.meaningState === "loading") return;
+        if (card.dataset.meaningState === "error") return;
+        if (expandedIds.has(w._id)) expandedIds.delete(w._id);
+        else expandedIds.add(w._id);
+        updateMeaningUI(card);
       };
 
-      input.onkeydown = e => {
-        if (e.key === "Enter") finish(true);
-        if (e.key === "Escape") finish(false);
-      };
+      let pressTimer;
+      card.addEventListener("touchstart", (e) => {
+        pressTimer = setTimeout(() => {
+          if (confirm(`"${w.text}" 단어를 삭제할까요?`)) deleteWord(w._id);
+        }, 500);
+      }, { passive: true });
+      card.addEventListener("touchend", () => clearTimeout(pressTimer));
+      card.addEventListener("touchmove", () => clearTimeout(pressTimer));
 
-      input.onblur = () => finish(true);
-    };
-
-    tr.appendChild(statTd);
-
-    /* Records */
-    sessions.forEach(s => {
-      const td = document.createElement("td");
-      const val = recordMap[`${w._id}_${s._id}`];
-      if (val === "success") td.innerText = "✓";
-      if (val === "fail") td.innerText = "✕";
-
-      if (s.status === "open" && !filters.mode.exam) {
-        td.onclick = () => toggleRecord(w._id, s._id).then(() => loadTable(true));
-      } else {
-        td.style.opacity = "0.35";
-      }
-
-      tr.appendChild(td);
+      section.appendChild(card);
+      if (!w.meaning) fetchMeaning(w._id, card);
+      else updateMeaningUI(card);
     });
 
-    tbody.appendChild(tr);
+    wordList.appendChild(section);
   });
-
-  table.appendChild(tbody);
-  tableDiv.innerHTML = "";
-  tableDiv.appendChild(table);
-
-  const pager = document.createElement("div");
-  pager.style.marginTop = "12px";
-  pager.style.textAlign = "left";
-
-  const prev = document.createElement("button");
-  prev.innerText = "◀ 이전";
-  prev.disabled = currentPage === 0;
-  prev.onclick = () => {
-    currentPage--;
-    loadTable();
-  };
-
-  const next = document.createElement("button");
-  next.innerText = "다음 ▶";
-  next.disabled = currentPage >= totalPages - 1;
-  next.onclick = () => {
-    currentPage++;
-    loadTable();
-  };
-
-  const bookmarkBtn = document.createElement("button");
-  bookmarkBtn.innerText = "북마크";
-  bookmarkBtn.onclick = () => {
-    const startIdx = (currentPage + 1) * PAGE_SIZE;
-    let idx = filtered.slice(startIdx).findIndex(w => w.bookmarked);
-
-    if (idx === -1) {
-      idx = filtered.findIndex(w => w.bookmarked);
-      if (idx === -1) {
-        alert("현재 필터 조건에 북마크된 단어가 없습니다.");
-        return;
-      }
-    } else {
-      idx = startIdx + idx;
-    }
-
-    currentPage = Math.floor(idx / PAGE_SIZE);
-    loadTable();
-  };
-
-  pager.appendChild(prev);
-  pager.appendChild(next);
-  pager.appendChild(bookmarkBtn);
-  pager.appendChild(
-    document.createTextNode(` ${currentPage + 1}/${totalPages} `)
-  );
-
-  tableDiv.appendChild(pager);
-
-  wireFilters();
 }
 
-/* =========================
-   Init
-========================= */
-wireFilters();
-loadTable();
+async function addWord(text) {
+  if (adding) return;
+  adding = true;
+  addBtn.disabled = true;
+  try {
+    const res = await fetch("/words", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, addedDate: todayKST() })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showToast(data.error || "추가 실패");
+      return;
+    }
+    wordInput.value = "";
+    await loadWords();
+  } finally {
+    adding = false;
+    setOfflineState(!navigator.onLine);
+  }
+}
+
+async function deleteWord(id) {
+  await fetch(`/words/${id}`, { method: "DELETE" });
+  expandedIds.delete(id);
+  await loadWords();
+}
+
+addForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const text = wordInput.value.trim();
+  if (text) addWord(text);
+});
+
+function setOfflineState(offline) {
+  offlineMsg.classList.toggle("hidden", !offline);
+  wordInput.disabled = offline;
+  addBtn.disabled = offline || adding;
+}
+
+window.addEventListener("online", () => setOfflineState(false));
+window.addEventListener("offline", () => setOfflineState(true));
+setOfflineState(!navigator.onLine);
+
+loadWords();
