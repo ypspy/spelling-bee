@@ -1,0 +1,270 @@
+# Wordly Wise 3000 Section — Design Spec
+
+**Date:** 2026-07-08  
+**Status:** Draft  
+**Approach:** Separate model + API (Approach 1)
+
+## Summary
+
+Add a **Wordly Wise 3000** section alongside the existing **오늘의 단어장** (daily word notebook). Users register words one at a time per Book and Lesson, browse the current lesson's word list, and jump to recently practiced lessons. The daily notebook remains unchanged.
+
+## Goals
+
+- Keep 오늘의 단어장 behavior, data model, and API untouched
+- Add Book (1–12) / Lesson (1–10) vocabulary organization for Wordly Wise 3000
+- Reuse English TTS, translation API, tap-to-expand meaning, and long-press delete UX
+- Mobile/tablet-first UI with top tab navigation
+
+## Non-Goals
+
+- Bulk import (CSV, paste multiple lines)
+- Merging Wordly Wise words into the daily 4-day window
+- User accounts or multi-device sync of "recent lessons"
+- Pre-populating official Wordly Wise 3000 word lists
+- Korean meaning TTS
+
+## User Workflow
+
+1. User opens app, taps **Wordly Wise** tab
+2. Selects Book and Lesson (selection persists while adding words)
+3. Types one English word and taps add
+4. Word appears in current lesson list; meaning loads via translation API
+5. User taps word for English TTS, taps to expand/collapse meaning
+6. User long-presses card to delete a word
+7. User taps a **recent lesson** chip to switch Book/Lesson quickly
+8. User switches to **오늘의 단어장** tab for daily practice (unchanged)
+
+## Architecture
+
+```
+┌─────────────────────────────────────────┐
+│  public/ (tabs: Daily | Wordly Wise)   │
+└──────────────┬──────────────────────────┘
+               │
+     ┌─────────┴─────────┐
+     ▼                   ▼
+ /words (daily)    /ww/words (WW3000)
+     │                   │
+     ▼                   ▼
+  Word model        WordlyWord model
+     │                   │
+     └─────────┬─────────┘
+               ▼
+    /translation/:id  /tts
+```
+
+## What Stays Unchanged
+
+- `models/Word.js`, `routes/words.js`, daily `public/app.js` daily panel logic
+- 4-day KST window, `addedDate` today-only POST rule
+- `GET /tts`, daily translation flow for `Word` documents
+
+## Data Model
+
+### WordlyWord (new)
+
+```js
+{
+  book: Number,     // 1–12, required, integer
+  lesson: Number,   // 1–10, required, integer
+  text: String,     // lowercase, trimmed, required
+  meaning: String,  // default "", filled by translation API
+  createdAt: Date,
+  updatedAt: Date   // timestamps
+}
+```
+
+### Indexes
+
+- `{ book: 1, lesson: 1, text: 1 }` — **unique**
+- `{ book: 1, lesson: 1 }` — lesson list queries
+- `{ updatedAt: -1 }` — recent lessons aggregation
+
+### Constraints
+
+- `text` validation: reuse `lib/validate.js` (`normalizeText`, `validateWordText`)
+- `book` must be integer 1–12 inclusive
+- `lesson` must be integer 1–10 inclusive
+- Duplicate `book` + `lesson` + `text` → 409 Conflict
+
+### Constants
+
+```js
+const WW_BOOK_MIN = 1;
+const WW_BOOK_MAX = 12;
+const WW_LESSON_MIN = 1;
+const WW_LESSON_MAX = 10;
+const WW_RECENT_LESSONS_LIMIT = 5;
+```
+
+Place in `lib/wordlyWise.js` (or `lib/ww.js`) for shared server/client reference.
+
+## API
+
+### `GET /ww/words?book=N&lesson=M`
+
+Returns words for the lesson, sorted by `text` ascending.
+
+Response:
+
+```json
+{
+  "words": [
+    { "_id": "...", "book": 3, "lesson": 5, "text": "abandon", "meaning": "..." }
+  ]
+}
+```
+
+- `book` and `lesson` query params required
+- Validate ranges; 400 on invalid
+
+### `POST /ww/words`
+
+Body: `{ "text": "abandon", "book": 3, "lesson": 5 }`
+
+- Normalize and validate `text`
+- Validate `book` / `lesson` ranges
+- Create with empty `meaning`
+- 409 on duplicate
+
+### `DELETE /ww/words/:id`
+
+Delete one WordlyWord. Invalid ObjectId → 400. Not found → 404.
+
+### `GET /ww/recent-lessons?limit=5`
+
+Returns recently practiced lessons grouped by `book` + `lesson`, ordered by most recent `updatedAt` (from any word in that lesson).
+
+Response:
+
+```json
+{
+  "lessons": [
+    { "book": 3, "lesson": 4, "lastActivity": "2026-07-08T12:00:00.000Z" },
+    { "book": 3, "lesson": 2, "lastActivity": "2026-07-07T..." }
+  ]
+}
+```
+
+Default `limit` = 5, max 10.
+
+### `GET /translation/:wordId` (extend existing)
+
+Lookup order:
+
+1. `Word.findById(wordId)` — daily notebook (existing)
+2. If not found, `WordlyWord.findById(wordId)` — Wordly Wise
+3. Fetch/generate `meaning` via existing `fetchKoreanMeaning(text)`, save to whichever model matched
+
+Response unchanged: `{ meaning }`
+
+## Frontend
+
+### Tab navigation
+
+- Two tabs at top: **오늘의 단어장** | **Wordly Wise**
+- Only one panel visible at a time
+- Active tab persisted in `localStorage` (`activeTab: 'daily' | 'ww'`)
+
+### Wordly Wise panel layout
+
+```
+┌─────────────────────────────────┐
+│ [오늘의 단어장] [Wordly Wise]    │
+├─────────────────────────────────┤
+│ Book [▼]   Lesson [▼]           │
+├─────────────────────────────────┤
+│ 최근: B3-L4 · B3-L2 · B2-L1     │
+├─────────────────────────────────┤
+│ [ english word          ] [+]   │
+├─────────────────────────────────┤
+│ Book 3 · Lesson 5               │
+│  word cards...                  │
+└─────────────────────────────────┘
+```
+
+### Book / Lesson selectors
+
+- Dropdowns: Book 1–12, Lesson 1–10
+- Selected values persist in `localStorage` (`wwBook`, `wwLesson`)
+- Changing dropdown reloads word list for that lesson
+
+### Recent lessons row
+
+- Fetch `GET /ww/recent-lessons`
+- Render chips: `B3-L4` format
+- Tap chip → set Book/Lesson selectors and reload list
+- Hide row when empty
+
+### Word cards (same as daily)
+
+- Collapsed meaning by default
+- Tap word row / speaker → English TTS
+- Tap meaning toggle → expand/collapse
+- Long-press 500ms → delete confirm
+- Meaning fetch via `GET /translation/:wordId`
+- Retry on translation failure
+
+### Empty state
+
+When lesson has no words:
+
+- Message: "이 레슨에 추가한 단어가 없어요"
+- Subtitle: "위에서 영어 단어를 입력해 보세요"
+
+### Daily panel
+
+- Existing UI and behavior unchanged when daily tab is active
+
+## File Changes
+
+| File | Action |
+|------|--------|
+| `models/WordlyWord.js` | Create |
+| `lib/wordlyWise.js` | Create — range constants, validators |
+| `routes/wwWords.js` | Create — GET/POST/DELETE + recent-lessons |
+| `routes/translation.js` | Modify — lookup WordlyWord fallback |
+| `server.js` | Mount `/ww` router |
+| `public/index.html` | Add tabs, WW panel markup |
+| `public/style.css` | Tab bar, selectors, recent chips |
+| `public/app.js` | Refactor or split — daily + WW sections |
+| `README.md` | Document WW section (optional, post-implementation) |
+
+## Error Handling
+
+| Case | Response / UX |
+|------|----------------|
+| Duplicate word in lesson | 409 + "이미 추가된 단어입니다" |
+| Invalid book/lesson range | 400 + Korean message |
+| Invalid word text | 400 (reuse validate messages) |
+| Translation failure | Word kept; retry button in UI |
+| TTS failure | Toast; app continues |
+| Offline | Disable add; show offline banner (shared) |
+
+## Testing (Manual)
+
+- [ ] Daily tab unchanged after WW addition
+- [ ] Add word to Book 3 Lesson 5 → appears in list
+- [ ] Switch lesson → different list
+- [ ] Recent lessons chips update after add
+- [ ] Tap recent chip → correct lesson loads
+- [ ] Duplicate same word same lesson → 409
+- [ ] Lesson 11 rejected; Book 13 rejected
+- [ ] TTS, meaning expand, long-press delete work on WW cards
+- [ ] Translation works for WordlyWord IDs
+- [ ] Mobile viewport usable
+
+## Decisions Log
+
+| Decision | Choice |
+|----------|--------|
+| Isolation from daily | Separate WordlyWord model + `/ww` API |
+| Navigation | Top tabs (오늘의 단어장 \| Wordly Wise) |
+| Word entry | One at a time per lesson |
+| Book/Lesson picker | Sticky dropdowns while adding |
+| Lesson list view | Current Book+Lesson only |
+| Recent lessons | Server-side, top 5 by `updatedAt` |
+| Card UX | Same as daily (TTS, meaning, delete) |
+| Book range | 1–12 |
+| Lesson range | 1–10 |
+| Meaning source | Existing translation API |
