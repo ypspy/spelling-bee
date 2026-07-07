@@ -65,12 +65,22 @@ Add a **Wordly Wise 3000** section alongside the existing **오늘의 단어장*
 
 ```js
 {
-  book: Number,     // 1–12, required, integer
-  lesson: Number,   // 1–10, required, integer
+  book: {
+    type: Number,
+    required: true,
+    min: 1,
+    max: 12,
+    validate: { validator: Number.isInteger, message: "book must be an integer" }
+  },
+  lesson: {
+    type: Number,
+    required: true,
+    min: 1,
+    max: 10,
+    validate: { validator: Number.isInteger, message: "lesson must be an integer" }
+  },
   text: String,     // lowercase, trimmed, required
   meaning: String,  // default "", filled by translation API
-  createdAt: Date,
-  updatedAt: Date   // timestamps
 }
 ```
 
@@ -105,6 +115,10 @@ Place in `lib/wordlyWise.js` (or `lib/ww.js`) for shared server/client reference
 
 Returns words for the lesson, sorted by `text` ascending.
 
+- `book` and `lesson` query params **required**
+- Parse as integers; reject non-integers (`"3.5"`, `"abc"`, empty) with 400
+- Validate ranges 1–12 / 1–10; 400 on invalid
+
 Response:
 
 ```json
@@ -115,36 +129,40 @@ Response:
 }
 ```
 
-- `book` and `lesson` query params required
-- Validate ranges; 400 on invalid
-
 ### `POST /ww/words`
 
 Body: `{ "text": "abandon", "book": 3, "lesson": 5 }`
 
 - Normalize and validate `text`
-- Validate `book` / `lesson` ranges
+- Validate `book` / `lesson` as integers in range
 - Create with empty `meaning`
 - 409 on duplicate
+- **Response:** raw created `WordlyWord` document (same shape as daily `POST /words`), status 201
 
 ### `DELETE /ww/words/:id`
 
 Delete one WordlyWord. Invalid ObjectId → 400. Not found → 404.
 
+- **Response:** `{ "success": true }` (matches daily DELETE)
+
 ### `GET /ww/recent-lessons?limit=5`
 
-Returns recently practiced lessons grouped by `book` + `lesson`, ordered by most recent `updatedAt` (from any word in that lesson).
+Returns recently practiced lessons grouped by `book` + `lesson`, ordered by most recent activity.
 
-Response:
+**Aggregation (required):**
 
-```json
-{
-  "lessons": [
-    { "book": 3, "lesson": 4, "lastActivity": "2026-07-08T12:00:00.000Z" },
-    { "book": 3, "lesson": 2, "lastActivity": "2026-07-07T..." }
-  ]
-}
+```js
+WordlyWord.aggregate([
+  { $group: {
+      _id: { book: "$book", lesson: "$lesson" },
+      lastActivity: { $max: "$updatedAt" }
+  }},
+  { $sort: { lastActivity: -1 } },
+  { $limit: limit }
+])
 ```
+
+Map `_id` to `{ book, lesson, lastActivity }` in the response.
 
 Default `limit` = 5, max 10.
 
@@ -154,9 +172,9 @@ Lookup order:
 
 1. `Word.findById(wordId)` — daily notebook (existing)
 2. If not found, `WordlyWord.findById(wordId)` — Wordly Wise
-3. Fetch/generate `meaning` via existing `fetchKoreanMeaning(text)`, save to whichever model matched
+3. If neither found → 404 `{ error: "Word not found" }` (UI shows error state with retry; retry on 404 should not loop — treat 404 as permanent error for that card)
 
-Response unchanged: `{ meaning }`
+Response unchanged when found: `{ meaning }`
 
 ## Frontend
 
@@ -186,8 +204,27 @@ Response unchanged: `{ meaning }`
 ### Book / Lesson selectors
 
 - Dropdowns: Book 1–12, Lesson 1–10
+- **Defaults when `localStorage` empty:** Book 1, Lesson 1
 - Selected values persist in `localStorage` (`wwBook`, `wwLesson`)
 - Changing dropdown reloads word list for that lesson
+
+### Element IDs (no collision with daily panel)
+
+Daily panel keeps existing IDs: `wordInput`, `addForm`, `addBtn`, `wordList`.
+
+WW panel uses **prefixed IDs**:
+
+| Element | ID |
+|---------|-----|
+| Input | `wwWordInput` |
+| Form | `wwAddForm` |
+| Add button | `wwAddBtn` |
+| Word list | `wwWordList` |
+| Book select | `wwBookSelect` |
+| Lesson select | `wwLessonSelect` |
+| Recent row | `wwRecentLessons` |
+
+Refactor shared card styles to **classes** (`.word-card`, `.add-bar`, etc.); reserve IDs for `getElementById` bindings only.
 
 ### Recent lessons row
 
@@ -226,8 +263,11 @@ When lesson has no words:
 | `routes/translation.js` | Modify — lookup WordlyWord fallback |
 | `server.js` | Mount `/ww` router |
 | `public/index.html` | Add tabs, WW panel markup |
-| `public/style.css` | Tab bar, selectors, recent chips |
-| `public/app.js` | Refactor or split — daily + WW sections |
+| `public/style.css` | Tab bar, selectors, recent chips; class-based shared card styles |
+| `public/shared.js` | Create — speak, toast, meaning UI helpers |
+| `public/daily.js` | Create — extract existing daily logic unchanged |
+| `public/ww.js` | Create — Wordly Wise panel logic |
+| `public/app.js` | Thin bootstrap — tabs, load daily/ww modules |
 | `README.md` | Document WW section (optional, post-implementation) |
 
 ## Error Handling
@@ -238,6 +278,7 @@ When lesson has no words:
 | Invalid book/lesson range | 400 + Korean message |
 | Invalid word text | 400 (reuse validate messages) |
 | Translation failure | Word kept; retry button in UI |
+| Translation 404 (deleted word) | Show error; disable retry (no infinite loop) |
 | TTS failure | Toast; app continues |
 | Offline | Disable add; show offline banner (shared) |
 
