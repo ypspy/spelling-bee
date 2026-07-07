@@ -196,8 +196,11 @@ Response when found: `{ meaning }`
 ### Tab navigation
 
 - Two tabs at top: **오늘의 단어장** | **Wordly Wise**
+- Wrap existing daily UI in `<div id="dailyPanel">` (header, add bar, word list)
+- WW UI in `<div id="wwPanel" class="hidden">`
 - Only one panel visible at a time
 - Active tab persisted in `localStorage` (`activeTab: 'daily' | 'ww'`)
+- On page load, `app.js` reads `activeTab`, shows matching panel, calls that module's `init()` (lazy)
 
 ### Wordly Wise panel layout
 
@@ -256,7 +259,7 @@ Each module attaches to `window`: `window.DailyNotebook`, `window.WordlyWise`, `
 
 - Fetch `GET /ww/recent-lessons`
 - Render chips: `B3-L4` format
-- Tap chip → set Book/Lesson selectors and reload list
+- Tap chip → set Book/Lesson selectors, **persist `wwBook`/`wwLesson` to localStorage**, reload list
 - Hide row when empty
 
 ### Word cards (same as daily)
@@ -288,7 +291,7 @@ When lesson has no words:
 | `routes/wwWords.js` | Create — GET/POST/DELETE + recent-lessons |
 | `routes/translation.js` | Modify — lookup WordlyWord fallback |
 | `server.js` | Mount `/ww` router |
-| `public/index.html` | Add tabs, WW panel markup |
+| `public/index.html` | Add tabs; wrap existing daily UI in `#dailyPanel`; add `#wwPanel` markup |
 | `public/style.css` | Tab bar, selectors, recent chips; class-based shared card styles |
 | `public/shared.js` | Create — speak, toast, meaning UI helpers |
 | `public/daily.js` | Create — extract existing daily logic unchanged |
