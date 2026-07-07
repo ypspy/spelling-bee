@@ -4,63 +4,21 @@ const WordSchema = new mongoose.Schema({
   text: {
     type: String,
     required: true,
-    index: true
+    trim: true,
+    lowercase: true
   },
-
-  alphabet: {
-    type: String,
-    index: true
-  },
-
-  level: {
-    type: String,
-    enum: ["one", "two", "three"],
-    index: true
-  },
-
-  // ⭐️ 중요도 (이미 있음)
-  priority: {
-    type: Number,
-    default: 0,      // 0=기본, 1=중요, 2=핵심
-    index: true
-  },
-
-  // ⭐️ 북마크 (추가)
-  bookmarked: {
-    type: Boolean,
-    default: false,
-    index: true       // 북마크 검색/점프 성능용
-  },
-
-  active: {
-    type: Boolean,
-    default: true,
-    index: true
-  },
-
-  source: {
-    type: String,
-    default: "bulk-v2"
-  },
-
-  // 한국어 뜻 (초등학교 3-5학년 수준)
   meaning: {
     type: String,
     default: ""
   },
-
-  // 부르는 말 (nickname)
-  nickname: {
+  addedDate: {
     type: String,
-    default: ""
-  },
-
-  // 간단한 뜻 (definition)
-  definition: {
-    type: String,
-    default: ""
+    required: true,
+    match: /^\d{4}-\d{2}-\d{2}$/
   }
-
 }, { timestamps: true });
+
+WordSchema.index({ addedDate: -1, text: 1 });
+WordSchema.index({ text: 1, addedDate: 1 }, { unique: true });
 
 module.exports = mongoose.model("Word", WordSchema);
