@@ -131,7 +131,7 @@ Body: `{ "text": "apple", "addedDate": "2026-07-07" }`
 
 ### `DELETE /words/:id`
 
-Delete a single word (for typo correction). Validate ObjectId. No cascade — `Record` model is removed; delete word only.
+Delete a single word (for typo correction). Invalid ObjectId → 400. No cascade — `Record` model is removed; delete word only.
 
 ### `GET /translation/:wordId` (existing, keep)
 
@@ -180,8 +180,8 @@ All `/sessions`, `/records`, `/stats`, `/table`, and `/tts/word/:wordId` routes.
 
 When no words exist in the 4-day window:
 
-- Show date sections for today only (or hide empty past-day headers)
-- Centered message: "아직 추가한 단어가 없어요" with subtitle "위에서 영어 단어를 입력해 보세요"
+- No date section headers — show centered message only
+- Message: "아직 추가한 단어가 없어요" with subtitle "위에서 영어 단어를 입력해 보세요"
 - Input bar remains active
 
 ### Meaning Display
@@ -189,7 +189,7 @@ When no words exist in the 4-day window:
 - **Collapsed by default** on each card
 - Expand/collapse is per-card independent state (client-side only, not persisted)
 - While loading: show "뜻 불러오는 중…"
-- On failure: show "뜻을 가져오지 못했습니다" + retry button
+- On failure: show "뜻을 가져오지 못했습니다" + retry button (re-calls `GET /translation/:wordId`; disabled while in-flight)
 
 ### Responsive Design
 
@@ -232,17 +232,18 @@ Rewrite to support simplified CRUD and date-range query only. Remove `Record` im
 One-time script using raw Mongoose connection (`lib/db.js`), **not** deleted Session/Record models:
 
 1. Connect via `lib/db.js`
-2. `mongoose.connection.db.collection(name).deleteMany({})` for `words`, `sessions`, `records`
-3. Log counts cleared per collection
+2. **Drop** (not just clear) `words`, `sessions`, `records` collections via `collection.drop()` — catches missing collections gracefully
+3. Log result per collection
 4. Require `--yes` flag to prevent accidental runs
+5. Disconnect and exit
 
-**Deploy order:**
+**Deploy order (index-safety):**
 
-1. Deploy new code (with simplified Word schema and deleted models/routes)
-2. Run `node scripts/reset_db.js --yes` once against the target database
-3. Verify empty app loads correctly
+1. Stop the running server
+2. Run `node scripts/reset_db.js --yes` — drops legacy collections **before** new schema indexes are built
+3. Deploy new code and start server — Mongoose creates fresh `words` collection with new unique index on empty data
 
-The script tolerates missing `sessions`/`records` collections (logs skip, continues).
+The script must run against the target database while the old server is stopped. Do not deploy new code first on a DB that still has legacy `words` rows lacking `addedDate`.
 
 ## Error Handling
 
