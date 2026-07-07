@@ -9,19 +9,11 @@ app.use(express.json({ limit: "10mb" })); // 요청 크기 제한
 app.use(express.static("public"));
 
 // Router 등록부
-const sessionRoutes = require("./routes/sessions");
 const wordRoutes = require("./routes/words");
-const recordRoutes = require("./routes/records");
-const statsRoutes = require("./routes/stats");
-const tableRoutes = require("./routes/table");
 const ttsRoutes = require("./routes/tts");
 const translationRoutes = require("./routes/translation");
 
-app.use("/sessions", sessionRoutes);
 app.use("/words", wordRoutes);
-app.use("/records", recordRoutes);
-app.use("/stats", statsRoutes);
-app.use("/table", tableRoutes);
 app.use("/tts", ttsRoutes);
 app.use("/translation", translationRoutes);
 
