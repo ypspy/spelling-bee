@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "reset-db": "node scripts/reset_db.js --yes"
+    "reset-db": "node scripts/reset_db.js --yes",
+    "refresh-meanings": "node scripts/refresh_meanings.js --yes"
   },
   "keywords": [],
   "author": "",

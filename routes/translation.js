@@ -61,13 +61,13 @@ async function fetchKoreanMeaning(englishWord) {
 아래 규칙을 반드시 지켜서 단어의 설명을 만들어라.
 
 출력 형식(Output Format)
-아래 네 가지를 반드시 순서대로 출력한다:
+아래를 반드시 순서대로 출력한다:
 
 단어: (입력된 영어 단어)
 
-부르는 말: 단어를 아주 쉽게 부르도록 만든 짧은 별명
+요약: 핵심 뜻을 짧게 (예: 번식하다, 구조, 영양소)
 
-간단한 뜻: 초등학교 3학년이 이해할 수 있는 1~2문장의 설명
+설명: 초등학교 3학년이 이해할 수 있는 1문장 설명 (예: 새끼나 씨앗을 만드는 것이에요)
 
 발음: 영어 발음을 한국어로 쉽게 표시(사용자가 요청한 경우만 넣기)
 
@@ -83,8 +83,8 @@ async function fetchKoreanMeaning(englishWord) {
 전체 1~2문장으로 끝내기
 
 [부르는 말 규칙]
-“명사구 형태”로 짧고 직관적이어야 한다
-예: gravity → “당기는 힘”, orbit → “도는 길”
+요약은 사전식으로 짧게 쓴다 (동사면 ~하다 형태)
+예: reproduce → "번식하다", structure → "구조"
 
 [비유 허용]
 필요하면 간단한 비유 사용 가능
@@ -118,6 +118,12 @@ async function fetchKoreanMeaning(englishWord) {
         }
         return "";
       };
+
+      const summary = sanitizePart(pickValue("요약") || pickValue("부르는 말"), { short: true });
+      const detail = sanitizePart(pickValue("설명") || pickValue("간단한 뜻"));
+      if (summary) {
+        return { meaning: formatStoredMeaning(summary, detail), raw };
+      }
 
       const simpleMeaning = pickValue("간단한 뜻");
       if (simpleMeaning) {
@@ -222,6 +228,33 @@ function simplifyForElementary(text) {
   return text.trim();
 }
 
+function formatStoredMeaning(summary, detail) {
+  if (!summary) return "";
+  if (!detail) return summary;
+  return `${summary}::${detail}`;
+}
+
+function sanitizePart(text, { short = false } = {}) {
+  if (!text) return "";
+
+  let out = text.trim();
+  out = out.replace(/^단어\s*[:：]\s*/i, "");
+  out = out.replace(/^요약\s*[:：]\s*/i, "");
+  out = out.replace(/^설명\s*[:：]\s*/i, "");
+  out = out.replace(/^부르는 말\s*[:：]\s*/i, "");
+  out = out.replace(/^간단한 뜻\s*[:：]\s*/i, "");
+  out = out.replace(/^발음\s*[:：]\s*/i, "");
+  out = out.replace(/^["'`]|["'`]$/g, "");
+
+  const pattern = short ? /[^가-힣\s]/g : /[^가-힣\s.!?,/()]/g;
+  out = out.replace(pattern, "").replace(/\s+/g, " ").trim();
+
+  if (!/[가-힣]/.test(out)) return "";
+  if (short && out.length > 20) out = out.slice(0, 20).trim();
+
+  return out;
+}
+
 function sanitizeMeaning(text) {
   if (!text) return "";
 
@@ -243,3 +276,4 @@ function sanitizeMeaning(text) {
 }
 
 module.exports = router;
+module.exports.fetchKoreanMeaning = fetchKoreanMeaning;

@@ -212,6 +212,18 @@ body {
   line-height: 1.5;
 }
 
+.meaning-summary {
+  display: block;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 4px;
+}
+
+.meaning-detail {
+  display: block;
+  color: #ccc;
+}
+
 /* =========================
    Speak button
 ========================= */

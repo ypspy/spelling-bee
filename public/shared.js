@@ -1,6 +1,49 @@
 window.Shared = {
   expandedIds: new Set(),
 
+  parseMeaning(meaning) {
+    if (!meaning) return { summary: "", detail: "" };
+
+    if (meaning.includes("::")) {
+      const idx = meaning.indexOf("::");
+      return {
+        summary: meaning.slice(0, idx).trim(),
+        detail: meaning.slice(idx + 2).trim()
+      };
+    }
+
+    const paren = meaning.match(/^(.+?)\s*\((.+)\)\s*$/);
+    if (paren) {
+      return { summary: paren[1].trim(), detail: paren[2].trim() };
+    }
+
+    const comma = meaning.indexOf(", ");
+    if (comma !== -1) {
+      return {
+        summary: meaning.slice(0, comma).trim(),
+        detail: meaning.slice(comma + 2).trim()
+      };
+    }
+
+    return { summary: meaning.trim(), detail: "" };
+  },
+
+  escapeHtml(text) {
+    return text
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  },
+
+  renderMeaningHTML(meaning) {
+    const { summary, detail } = this.parseMeaning(meaning);
+    if (!summary) return "";
+    const summaryHtml = `<strong class="meaning-summary">${this.escapeHtml(summary)}</strong>`;
+    if (!detail) return summaryHtml;
+    return `${summaryHtml}<span class="meaning-detail">${this.escapeHtml(detail)}</span>`;
+  },
+
   speak(text) {
     if (window._ttsAudio) {
       window._ttsAudio.pause();
@@ -49,12 +92,12 @@ window.Shared = {
 
     if (state === "loading") {
       toggle.textContent = "뜻 불러오는 중…";
-      textEl.textContent = "";
+      textEl.innerHTML = "";
       return;
     }
     if (state === "notfound") {
       toggle.textContent = "단어를 찾을 수 없습니다";
-      textEl.textContent = "";
+      textEl.innerHTML = "";
       textEl.classList.add("hidden");
       return;
     }
@@ -68,7 +111,7 @@ window.Shared = {
       return;
     }
     toggle.textContent = this.expandedIds.has(id) ? "▼ 뜻 숨기기" : "▶ 뜻 보기";
-    textEl.textContent = meaning;
+    textEl.innerHTML = this.renderMeaningHTML(meaning);
     textEl.classList.toggle("hidden", !this.expandedIds.has(id));
   },
 
