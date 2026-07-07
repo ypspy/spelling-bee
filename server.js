@@ -17,6 +17,11 @@ app.use("/words", wordRoutes);
 app.use("/tts", ttsRoutes);
 app.use("/translation", translationRoutes);
 
+// 헬스 체크
+app.get("/health", (req, res) => {
+  res.json({ status: "OK", timestamp: new Date().toISOString() });
+});
+
 // 404 핸들러
 app.use((req, res) => {
   res.status(404).json({ error: "Not found" });
@@ -36,11 +41,6 @@ db.connect()
     console.error('MongoDB connection error:', err.message);
     process.exit(1);
   });
-
-// 헬스 체크
-app.get("/health", (req, res) => {
-  res.json({ status: "OK", timestamp: new Date().toISOString() });
-});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
