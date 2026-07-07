@@ -7,18 +7,42 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <header class="header">
-    <h1>오늘의 단어장</h1>
-  </header>
+  <nav class="tab-bar">
+    <button type="button" class="tab active" data-tab="daily">오늘의 단어장</button>
+    <button type="button" class="tab" data-tab="ww">Wordly Wise</button>
+  </nav>
 
-  <form id="addForm" class="add-bar">
-    <input id="wordInput" type="text" placeholder="영어 단어" autocomplete="off" autocapitalize="off" />
-    <button type="submit" id="addBtn">+</button>
-  </form>
+  <div id="dailyPanel">
+    <header class="header">
+      <h1>오늘의 단어장</h1>
+    </header>
 
-  <div id="offlineMsg" class="offline hidden">오프라인입니다</div>
-  <main id="wordList"></main>
+    <form id="addForm" class="add-bar">
+      <input id="wordInput" class="word-input" type="text" placeholder="영어 단어" autocomplete="off" autocapitalize="off" />
+      <button type="submit" id="addBtn" class="add-btn">+</button>
+    </form>
 
+    <div id="offlineMsg" class="offline hidden">오프라인입니다</div>
+    <main id="wordList"></main>
+  </div>
+
+  <div id="wwPanel" class="hidden">
+    <div class="ww-selectors">
+      <label>Book <select id="wwBookSelect"></select></label>
+      <label>Lesson <select id="wwLessonSelect"></select></label>
+    </div>
+    <div id="wwRecentLessons" class="recent-lessons hidden"></div>
+    <form id="wwAddForm" class="add-bar">
+      <input id="wwWordInput" class="word-input" type="text" placeholder="영어 단어" autocomplete="off" autocapitalize="off" />
+      <button type="submit" id="wwAddBtn" class="add-btn">+</button>
+    </form>
+    <h2 id="wwLessonTitle" class="lesson-title"></h2>
+    <main id="wwWordList"></main>
+  </div>
+
+  <script src="shared.js"></script>
+  <script src="daily.js"></script>
+  <script src="ww.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
