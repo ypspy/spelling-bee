@@ -71,6 +71,8 @@ function isValidDateStr(s) {
 function clampWordRange(from, to) {
   const today = todayKST();
   const maxFrom = addDaysKST(today, -3);
+  if (from && !isValidDateStr(from)) from = maxFrom;
+  if (to && !isValidDateStr(to)) to = today;
   const effectiveTo = !to || to > today ? today : to;
   const effectiveFrom = !from || from < maxFrom ? maxFrom : from;
   if (effectiveFrom > effectiveTo) return { from: today, to: today };
@@ -197,7 +199,7 @@ router.post("/", async (req, res) => {
     if (textError) return res.status(400).json({ error: textError });
 
     if (!isValidDateStr(addedDate) || addedDate !== todayKST()) {
-      return res.status(400).json({ error: "addedDate must be today (KST)" });
+      return res.status(400).json({ error: "오늘 날짜로만 단어를 추가할 수 있습니다" });
     }
 
     const word = await Word.create({ text, addedDate, meaning: "" });
@@ -273,7 +275,7 @@ Delete unused helper functions: `parseDefinition` and any nickname/definition-on
 
 - [ ] **Step 2: Simplify `routes/tts.js`**
 
-Remove `Word` import and entire `GET /word/:wordId` handler (lines 71–117). Keep only `GET /` for English TTS. Optionally restrict `lang` to `"en"` only since Korean TTS is removed:
+Remove `Word` import and entire `GET /word/:wordId` handler (lines 71–117). Keep only `GET /` for English TTS. **Required:** restrict `lang` to `"en"` only:
 
 ```js
 if (lang !== "en") {
@@ -318,12 +320,7 @@ app.use("/translation", translationRoutes);
 
 Remove imports and `app.use` for sessions, records, stats, table.
 
-- [ ] **Step 3: Verify server starts (after Task 7 reset)**
-
-Run: `npm start`
-Expected: `MongoDB connected` and `Server running on port 3000` with no require errors.
-
-- [ ] **Step 4: Commit**
+- [ ] **Step 3: Commit (do NOT start server yet — reset first in Task 6)**
 
 ```bash
 git add -A
@@ -397,12 +394,19 @@ Remove `populate-meanings` and `clear-meanings` entries.
 rm scripts/populate_meanings.js scripts/clear_meanings.js scripts/test_translation_full.js scripts/test_endpoints.js
 ```
 
-- [ ] **Step 4: Run reset (server must be stopped)**
+- [ ] **Step 4: Stop any running server, then run reset**
+
+Ensure no `node server.js` / `nodemon` process is running, then:
 
 Run: `npm run reset-db`
 Expected: `Dropped collection: words` (and sessions/records), `Reset complete.`
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Verify server starts on clean DB**
+
+Run: `npm start`
+Expected: `MongoDB connected` and `Server running on port 3000` with no require errors.
+
+- [ ] **Step 6: Commit**
 
 ```bash
 git add scripts/reset_db.js package.json
@@ -502,12 +506,17 @@ function addDays(dateStr, delta) {
   return dt.toISOString().slice(0, 10);
 }
 
+function formatMD(dateStr) {
+  const [, m, d] = dateStr.split("-").map(Number);
+  return `${m}/${d}`;
+}
+
 function dateLabel(addedDate) {
   const today = todayKST();
   const yesterday = addDays(today, -1);
-  if (addedDate === today) return `오늘 (${addedDate.slice(5).replace("-", "/")})`;
-  if (addedDate === yesterday) return `어제 (${addedDate.slice(5).replace("-", "/")})`;
-  return addedDate.slice(5).replace("-", "/");
+  if (addedDate === today) return `오늘 (${formatMD(addedDate)})`;
+  if (addedDate === yesterday) return `어제 (${formatMD(addedDate)})`;
+  return formatMD(addedDate);
 }
 
 function speak(text) {
@@ -674,9 +683,15 @@ addForm.addEventListener("submit", (e) => {
   if (text) addWord(text);
 });
 
-window.addEventListener("online", () => offlineMsg.classList.add("hidden"));
-window.addEventListener("offline", () => offlineMsg.classList.remove("hidden"));
-if (!navigator.onLine) offlineMsg.classList.remove("hidden");
+function setOfflineState(offline) {
+  offlineMsg.classList.toggle("hidden", !offline);
+  wordInput.disabled = offline;
+  addBtn.disabled = offline || adding;
+}
+
+window.addEventListener("online", () => setOfflineState(false));
+window.addEventListener("offline", () => setOfflineState(true));
+setOfflineState(!navigator.onLine);
 
 loadWords();
 ```
