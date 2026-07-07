@@ -81,13 +81,12 @@ Add a **Wordly Wise 3000** section alongside the existing **오늘의 단어장*
   },
   text: String,     // lowercase, trimmed, required
   meaning: String,  // default "", filled by translation API
-}
+}, { timestamps: true });
 ```
 
 ### Indexes
 
-- `{ book: 1, lesson: 1, text: 1 }` — **unique**
-- `{ book: 1, lesson: 1 }` — lesson list queries
+- `{ book: 1, lesson: 1, text: 1 }` — **unique** (also covers lesson list queries via prefix)
 - `{ updatedAt: -1 }` — recent lessons aggregation
 
 ### Constraints
@@ -164,7 +163,7 @@ WordlyWord.aggregate([
 
 Map `_id` to `{ book, lesson, lastActivity }` in the response.
 
-Default `limit` = 5, max 10.
+Default `limit` = 5, max 10. Parse as integer; invalid/missing → 5; clamp to `[1, 10]`.
 
 ### `GET /translation/:wordId` (extend existing)
 
