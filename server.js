@@ -10,10 +10,12 @@ app.use(express.static("public"));
 
 // Router 등록부
 const wordRoutes = require("./routes/words");
+const wwRoutes = require("./routes/wwWords");
 const ttsRoutes = require("./routes/tts");
 const translationRoutes = require("./routes/translation");
 
 app.use("/words", wordRoutes);
+app.use("/ww", wwRoutes);
 app.use("/tts", ttsRoutes);
 app.use("/translation", translationRoutes);
 
