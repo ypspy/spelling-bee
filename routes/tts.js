@@ -4,25 +4,52 @@ const textToSpeech = require("@google-cloud/text-to-speech");
 const fs = require("fs");
 const path = require("path");
 
-// 개발 환경에서만 로그 표시
 const isDev = process.env.NODE_ENV !== "production";
 const log = (...args) => isDev && console.log(...args);
 
-// Google Cloud credentials 설정
-let credentials = undefined;
-if (process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64) {
-  try {
-    const credentialsJson = Buffer.from(process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64, 'base64').toString('utf8');
-    credentials = JSON.parse(credentialsJson);
-  } catch (err) {
-    log("Failed to parse TTS credentials:", err.message);
+function loadCredentials() {
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64) {
+    try {
+      return JSON.parse(
+        Buffer.from(process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64, "base64").toString("utf8")
+      );
+    } catch (err) {
+      log("Failed to parse TTS credentials (base64):", err.message);
+    }
   }
+
+  const credPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  if (credPath) {
+    const resolved = path.resolve(credPath);
+    if (fs.existsSync(resolved)) {
+      try {
+        return JSON.parse(fs.readFileSync(resolved, "utf8"));
+      } catch (err) {
+        log("Failed to read TTS credentials file:", err.message);
+      }
+    } else {
+      log("TTS credentials file not found:", resolved);
+    }
+  }
+
+  return null;
 }
 
-const client = new textToSpeech.TextToSpeechClient({ credentials });
+function getClient() {
+  if (getClient._client) return getClient._client;
+  const credentials = loadCredentials();
+  if (!credentials) return null;
+  getClient._client = new textToSpeech.TextToSpeechClient({ credentials });
+  return getClient._client;
+}
 
 router.get("/", async (req, res) => {
   try {
+    const client = getClient();
+    if (!client) {
+      return res.status(503).send("TTS not configured");
+    }
+
     const text = (req.query.text || "").trim();
     const lang = (req.query.lang || "en").toLowerCase();
 
