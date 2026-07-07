@@ -106,7 +106,7 @@ const WW_LESSON_MAX = 10;
 const WW_RECENT_LESSONS_LIMIT = 5;
 ```
 
-Place in `lib/wordlyWise.js` (or `lib/ww.js`) for shared server/client reference.
+Place in `lib/wordlyWise.js` for server routes. Duplicate the same numeric constants in `public/ww.js` (no bundler — browser cannot import `lib/`).
 
 ## API
 
@@ -163,7 +163,19 @@ WordlyWord.aggregate([
 
 Map `_id` to `{ book, lesson, lastActivity }` in the response.
 
+Response:
+
+```json
+{
+  "lessons": [
+    { "book": 3, "lesson": 4, "lastActivity": "2026-07-08T12:00:00.000Z" }
+  ]
+}
+```
+
 Default `limit` = 5, max 10. Parse as integer; invalid/missing → 5; clamp to `[1, 10]`.
+
+Client refetch triggers: WW panel init, after add, after delete.
 
 ### `GET /translation/:wordId` (extend existing)
 
@@ -171,9 +183,13 @@ Lookup order:
 
 1. `Word.findById(wordId)` — daily notebook (existing)
 2. If not found, `WordlyWord.findById(wordId)` — Wordly Wise
-3. If neither found → 404 `{ error: "Word not found" }` (UI shows error state with retry; retry on 404 should not loop — treat 404 as permanent error for that card)
+3. If neither found → 404 `{ error: "Word not found" }`
+4. If `meaning` already set, return cached
+5. Else `fetchKoreanMeaning(text)`, save via `findByIdAndUpdate` on whichever model matched (mirror existing `Word` path)
 
-Response unchanged when found: `{ meaning }`
+Response when found: `{ meaning }`
+
+**404 UI (both sections via `shared.js`):** show error text; **no retry button** on 404 (word deleted). Retry only on network/500 failures.
 
 ## Frontend
 
@@ -223,7 +239,18 @@ WW panel uses **prefixed IDs**:
 | Lesson select | `wwLessonSelect` |
 | Recent row | `wwRecentLessons` |
 
-Refactor shared card styles to **classes** (`.word-card`, `.add-bar`, etc.); reserve IDs for `getElementById` bindings only.
+Refactor shared card styles to **classes** (`.word-card`, `.add-bar`, `.word-input`, `.add-btn`); style both panels via classes, not IDs. WW keeps prefixed IDs only for `getElementById`.
+
+### Script load order (`index.html`)
+
+```html
+<script src="shared.js"></script>
+<script src="daily.js"></script>
+<script src="ww.js"></script>
+<script src="app.js"></script>
+```
+
+Each module attaches to `window`: `window.DailyNotebook`, `window.WordlyWise`, `window.Shared`. `app.js` handles tab switching and calls `DailyNotebook.init()` / `WordlyWise.init()` on first tab activation (lazy load lists).
 
 ### Recent lessons row
 
